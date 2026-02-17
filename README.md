@@ -1,5 +1,5 @@
-6502
-====
+6502-ASM
+========
 
 This is a collection of my 6502 assembly language programs.
 
