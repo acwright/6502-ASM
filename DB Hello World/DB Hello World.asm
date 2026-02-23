@@ -7,6 +7,11 @@
 reset:
   lda #$00
   sta EMU_SER_CTRL  ; Use DB USB Serial output
+  
+  lda #$0D          ; Carriage Return
+  sta EMU_SER_DATA
+  lda #$0A          ; Line feed
+  sta EMU_SER_DATA
 
   ldx #0
 print:
@@ -23,6 +28,6 @@ end:
   sta EMU_SER_DATA
 
 halt:
-  rts
+  jmp halt
 
-message: .asciiz "Hello, World!"
+message: .asciiz "hello, world!"

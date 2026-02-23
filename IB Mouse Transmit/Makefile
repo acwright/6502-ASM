@@ -6,7 +6,7 @@ CONFIG = 6502
 all: build woz
 
 build: $(TARGET).asm
-	cl65 -C ../$(CONFIG).cfg -l $(TARGET).lst -o $(TARGET).prg $(TARGET).asm 
+	cl65 -t none -C ../$(CONFIG).cfg -l $(TARGET).lst -o $(TARGET).prg $(TARGET).asm 
 	
 view:
 	hexdump -C $(TARGET).prg

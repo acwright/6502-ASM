@@ -206,24 +206,29 @@ Current file: DB Hello World.asm
 000000r 1  A9 00          lda #$00
 000002r 1  8D 01 84       sta EMU_SER_CTRL  ; Use DB USB Serial output
 000005r 1               
-000005r 1  A2 00          ldx #0
-000007r 1               print:
-000007r 1  BD rr rr       lda message,x
-00000Ar 1  F0 07          beq end
-00000Cr 1  8D 00 84       sta EMU_SER_DATA  ; Write char to DB serial data register
-00000Fr 1  E8             inx
-000010r 1  4C rr rr       jmp print
-000013r 1               
-000013r 1               end:
-000013r 1  A9 0D          lda #$0D          ; Carriage Return
-000015r 1  8D 00 84       sta EMU_SER_DATA
-000018r 1  A9 0A          lda #$0A          ; Line feed
-00001Ar 1  8D 00 84       sta EMU_SER_DATA
+000005r 1  A9 0D          lda #$0D          ; Carriage Return
+000007r 1  8D 00 84       sta EMU_SER_DATA
+00000Ar 1  A9 0A          lda #$0A          ; Line feed
+00000Cr 1  8D 00 84       sta EMU_SER_DATA
+00000Fr 1               
+00000Fr 1  A2 00          ldx #0
+000011r 1               print:
+000011r 1  BD rr rr       lda message,x
+000014r 1  F0 07          beq end
+000016r 1  8D 00 84       sta EMU_SER_DATA  ; Write char to DB serial data register
+000019r 1  E8             inx
+00001Ar 1  4C rr rr       jmp print
 00001Dr 1               
-00001Dr 1               halt:
-00001Dr 1  60             rts
-00001Er 1               
-00001Er 1  C8 45 4C 4C  message: .asciiz "Hello, World!"
-000022r 1  4F 2C 20 D7  
-000026r 1  4F 52 4C 44  
-00002Br 1               
+00001Dr 1               end:
+00001Dr 1  A9 0D          lda #$0D          ; Carriage Return
+00001Fr 1  8D 00 84       sta EMU_SER_DATA
+000022r 1  A9 0A          lda #$0A          ; Line feed
+000024r 1  8D 00 84       sta EMU_SER_DATA
+000027r 1               
+000027r 1               halt:
+000027r 1  4C rr rr       jmp halt
+00002Ar 1               
+00002Ar 1  68 65 6C 6C  message: .asciiz "hello, world!"
+00002Er 1  6F 2C 20 77  
+000032r 1  6F 72 6C 64  
+000037r 1               
