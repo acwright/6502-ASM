@@ -228,7 +228,7 @@ Current file: DB Hello World.asm
 000027r 1               halt:
 000027r 1  4C rr rr       jmp halt
 00002Ar 1               
-00002Ar 1  68 65 6C 6C  message: .asciiz "hello, world!"
-00002Er 1  6F 2C 20 77  
+00002Ar 1  48 65 6C 6C  message: .asciiz "Hello, World!"
+00002Er 1  6F 2C 20 57  
 000032r 1  6F 72 6C 64  
 000037r 1               

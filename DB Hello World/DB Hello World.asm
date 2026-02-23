@@ -30,4 +30,4 @@ end:
 halt:
   jmp halt
 
-message: .asciiz "hello, world!"
+message: .asciiz "Hello, World!"
