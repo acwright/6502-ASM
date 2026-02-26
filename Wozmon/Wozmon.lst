@@ -33,35 +33,13 @@ Current file: Wozmon.asm
 000000r 2               ; Program
 000000r 2               PROGRAM             := $0800             ; $0800-$7FFF
 000000r 2               
-000000r 2               ; RAM Card | IO 1 & 2 | $8000-$87FF
-000000r 2               RAM_DATA            := $8000             ; R/W ($8000-$83FE)
+000000r 2               ; RAM Card | IO 1 | $8000-$83FF
 000000r 2               RAM_DATA_L          := $8000             ; R/W ($8000-$83FE)
-000000r 2               RAM_DATA_H          := $8400             ; R/W ($8400-$87FE)
-000000r 2               RAM_BANK            := $83FF             ; All three RAM_BANK addresses address the same bank switching
-000000r 2               RAM_BANK_L          := $83FF             ; latch and can be univerally interchanged
-000000r 2               RAM_BANK_H          := $87FF             ; RAM bank latch value ($00-$FF) sets which of 256 ~1K banks of RAM is selected in both H or L
+000000r 2               RAM_BANK_L          := $83FF             ; Write-only RAM bank latch, value ($00-$FF) sets which of 256 ~1K banks of RAM is selected in both H or L
 000000r 2               
-000000r 2               ; Emulator | IO 2 | $8400-$840F
-000000r 2               EMU_SER_DATA        := $8400             ; R/W
-000000r 2               EMU_SER_CTRL        := $8401             ; Write
-000000r 2               EMU_SER_STATUS      := $8401             ; Read
-000000r 2               EMU_KB_CMD          := $8402             ; Write
-000000r 2               EMU_KB_DATA         := $8402             ; Read
-000000r 2               EMU_MOUSE_X         := $8403             ; Read
-000000r 2               EMU_MOUSE_Y         := $8404             ; Read
-000000r 2               EMU_MOUSE_W         := $8405             ; Read
-000000r 2               EMU_MOUSE_BTNS      := $8406             ; Read
-000000r 2               EMU_JOY_BTNS        := $8407             ; Read
-000000r 2               EMU_RTC_SEC         := $8408             ; Read
-000000r 2               EMU_RTC_MIN         := $8409             ; Read
-000000r 2               EMU_RTC_HR          := $840A             ; Read
-000000r 2               EMU_RTC_DAY         := $840B             ; Read
-000000r 2               EMU_RTC_MON         := $840C             ; Read
-000000r 2               EMU_RTC_YR          := $840D             ; Read
-000000r 2               EMU_PRAM_DATA       := $840E             ; R/W
-000000r 2               EMU_PRAM_ADDR       := $840F             ; R/W
-000000r 2               EMU_RAM             := $8600             ; R/W
-000000r 2               EMU_RAM_BANK        := $87FF             ; Write
+000000r 2               ; RAM Card | IO 2 | $8400-$87FF
+000000r 2               RAM_DATA_H          := $8400             ; R/W ($8400-$87FE)
+000000r 2               RAM_BANK_H          := $87FF             ; Write-only RAM bank latch, value ($00-$FF) sets which of 256 ~1K banks of RAM is selected in both H or L
 000000r 2               
 000000r 2               ; RTC Card | IO 3 | $8800-$881F
 000000r 2               RTC_SEC             := $8800
