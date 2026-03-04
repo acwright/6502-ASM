@@ -149,7 +149,7 @@ VERA_L0_CONFIG      := $9C0D
 VERA_L0_MAPBASE     := $9C0E
 VERA_L0_TILEBASE    := $9C0F
 
-; LCD Card | IO 8 | $9C00-$9C0F
+; LCD Card / LCD Board | IO 8 | $9C00-$9C0F
 LCD_PORTB           := $9C00
 LCD_PORTA           := $9C01
 LCD_DDRB            := $9C02
