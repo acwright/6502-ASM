@@ -246,31 +246,35 @@ Current file: Hello World.asm
 000000r 1               
 000000r 1               .segment "CODE"
 000000r 1               
-000000r 1               CHROUT := $0000       ; TODO: This needs to be updated with actual CHROUT location!
+000000r 1               Chrout := $A000
 000000r 1               
-000000r 1               Start:
-000000r 1  A9 0D          lda #$0D            ; Carriage Return
-000002r 1  20 00 00       jsr CHROUT          ; Write char to output device
-000005r 1  A9 0A          lda #$0A            ; Line feed
-000007r 1  20 00 00       jsr CHROUT          ; Write char to output device
-00000Ar 1               
-00000Ar 1  A2 00          ldx #0
-00000Cr 1               Print:
-00000Cr 1  BD rr rr       lda message,x
-00000Fr 1  F0 07          beq @PrintEnd
-000011r 1  20 00 00       jsr CHROUT          ; Write char to output device
-000014r 1  E8             inx
-000015r 1  4C rr rr       jmp Print
-000018r 1               @PrintEnd:
-000018r 1  A9 0D          lda #$0D            ; Carriage Return
-00001Ar 1  20 00 00       jsr CHROUT          ; Write char to output device
-00001Dr 1  A9 0A          lda #$0A            ; Line feed
-00001Fr 1  20 00 00       jsr CHROUT          ; Write char to output device
-000022r 1               
-000022r 1               Break:
-000022r 1  00             brk                 ; Break back to monitor
-000023r 1               
-000023r 1  48 65 6C 6C  message: .asciiz "Hello, World!"
-000027r 1  6F 2C 20 57  
-00002Br 1  6F 72 6C 64  
-000030r 1               
+000000r 1  0A 08 0A 00  BasicStartup: .byte $0A, $08, $0A, $00, $9E, $32, $30, $36, $30, $00, $00, $00    ; BASIC = 10 SYS 2060
+000004r 1  9E 32 30 36  
+000008r 1  30 00 00 00  
+00000Cr 1               
+00000Cr 1               Start:                ; $080C
+00000Cr 1  A9 0D          lda #$0D            ; CR
+00000Er 1  20 00 A0       jsr Chrout          ; Write char to output device
+000011r 1  A9 0A          lda #$0A            ; LF
+000013r 1  20 00 A0       jsr Chrout          ; Write char to output device
+000016r 1               
+000016r 1  A2 00          ldx #0
+000018r 1               Print:
+000018r 1  BD rr rr       lda Message,x
+00001Br 1  F0 07          beq @PrintEnd
+00001Dr 1  20 00 A0       jsr Chrout          ; Write char to output device
+000020r 1  E8             inx
+000021r 1  4C rr rr       jmp Print
+000024r 1               @PrintEnd:
+000024r 1  A9 0D          lda #$0D            ; CR
+000026r 1  20 00 A0       jsr Chrout          ; Write char to output device
+000029r 1  A9 0A          lda #$0A            ; LF
+00002Br 1  20 00 A0       jsr Chrout          ; Write char to output device
+00002Er 1               
+00002Er 1               End:
+00002Er 1  60             rts                 ; Return to BASIC
+00002Fr 1               
+00002Fr 1  48 65 6C 6C  Message: .asciiz "Hello, World!"
+000033r 1  6F 2C 20 57  
+000037r 1  6F 72 6C 64  
+00003Cr 1               

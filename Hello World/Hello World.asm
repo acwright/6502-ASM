@@ -4,28 +4,30 @@
 
 .segment "CODE"
 
-CHROUT := $0000       ; TODO: This needs to be updated with actual CHROUT location!
+Chrout := $A000       
 
-Start:
-  lda #$0D            ; Carriage Return
-  jsr CHROUT          ; Write char to output device
-  lda #$0A            ; Line feed
-  jsr CHROUT          ; Write char to output device
+BasicStartup: .byte $0A, $08, $0A, $00, $9E, $32, $30, $36, $30, $00, $00, $00    ; BASIC = 10 SYS 2060 
+
+Start:                ; $080C
+  lda #$0D            ; CR
+  jsr Chrout          ; Write char to output device
+  lda #$0A            ; LF
+  jsr Chrout          ; Write char to output device
 
   ldx #0
 Print:
-  lda message,x
+  lda Message,x
   beq @PrintEnd
-  jsr CHROUT          ; Write char to output device
+  jsr Chrout          ; Write char to output device
   inx
   jmp Print
 @PrintEnd:
-  lda #$0D            ; Carriage Return
-  jsr CHROUT          ; Write char to output device
-  lda #$0A            ; Line feed
-  jsr CHROUT          ; Write char to output device
+  lda #$0D            ; CR
+  jsr Chrout          ; Write char to output device
+  lda #$0A            ; LF
+  jsr Chrout          ; Write char to output device
 
-Break:
-  brk                 ; Break back to monitor
+End:
+  rts                 ; Return to BASIC
 
-message: .asciiz "Hello, World!"
+Message: .asciiz "Hello, World!"
