@@ -1,7 +1,7 @@
 6502-ASM
 ========
 
-Assembly code for the [A.C. Wright 6502 project](https://github.com/acwright/6502).
+Assembly code for the [A.C. Wright 6502 project](https://github.com/acwright/6502-ACE).
 
 ## Building Programs
 
