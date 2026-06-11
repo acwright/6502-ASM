@@ -1,5 +1,5 @@
-TARGET = Hello\ World
-EIGHTTHREE = HELLOWLD
+TARGET = KIM\ LED\ Demo\ -\ Counter
+EIGHTTHREE = KIMCOUNT
 CONFIG = 6502
 
 .PHONY: all clean

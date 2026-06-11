@@ -1,6 +1,6 @@
 ca65 V2.19 - Git 0fca83500
-Main file   : Hello World.asm
-Current file: Hello World.asm
+Main file   : KIM LED Demo - KITT.asm
+Current file: KIM LED Demo - KITT.asm
 
 000000r 1               .setcpu "65C02"
 000000r 1               
@@ -753,56 +753,40 @@ Current file: Hello World.asm
 000000r 1               .segment "CODE"
 000000r 1               
 000000r 1               ; =============================================================================
-000000r 1               ;   BASIC Startup Stub
+000000r 1               ;   KIM LED Demo — KITT Scanner ($0800)
 000000r 1               ; =============================================================================
-000000r 1               ;   A tokenized BASIC line: 10 SYS 2060
-000000r 1               ;   When this program is loaded into $0800 and RUN in BASIC, the SYS command
-000000r 1               ;   jumps to the machine code entry point at $080C (decimal 2060).
-000000r 1               ;   This stub must remain at the very start of the program.
+000000r 1               ;   Single LED bounces left and right on the 8 LEDs at $9400,
+000000r 1               ;   like the KITT scanner from Knight Rider.
+000000r 1               ;   Uses SysDelay (centiseconds) for ~100 ms per step.
+000000r 1               ;   Runs forever.
+000000r 1               ;
+000000r 1               ;   Machine code (38 bytes):
+000000r 1               ;     0800: A0 00 B9 18 08 8D 00 94 5A A9 0A A2 00 20 75 A0
+000000r 1               ;     0810: 7A C8 C0 0E D0 EC 80 E8
+000000r 1               ;     0818: 01 02 04 08 10 20 40 80 40 20 10 08 04 02
+000000r 1               ; =============================================================================
 000000r 1               
-000000r 1  0A 08 0A 00  BasicStartup: .byte $0A, $08, $0A, $00, $9E, $32, $30, $36, $30, $00, $00, $00
-000004r 1  9E 32 30 36  
-000008r 1  30 00 00 00  
-00000Cr 1               
-00000Cr 1               ; =============================================================================
-00000Cr 1               ;   Start — Program entry point ($080C)
-00000Cr 1               ; =============================================================================
-00000Cr 1               ;   The system is already fully initialized when your program runs:
-00000Cr 1               ;     - Hardware probed and initialized (HW_PRESENT is set)
-00000Cr 1               ;     - Interrupts enabled, keyboard active
-00000Cr 1               ;     - IO_MODE set (video or serial console)
-00000Cr 1               ;     - All Kernal jump table routines available
-00000Cr 1               ;
-00000Cr 1               ;   Return to BASIC with RTS.
-00000Cr 1               ; =============================================================================
-00000Cr 1               
-00000Cr 1               Start:
-00000Cr 1  A9 0D          lda #$0D            ; CR
-00000Er 1  20 00 A0       jsr Chrout          ; Write char to output device
-000011r 1  A9 0A          lda #$0A            ; LF
-000013r 1  20 00 A0       jsr Chrout          ; Write char to output device
-000016r 1               
-000016r 1  A2 00          ldx #0
-000018r 1               Print:
-000018r 1  BD rr rr       lda Message,x
-00001Br 1  F0 07          beq @PrintEnd
-00001Dr 1  20 00 A0       jsr Chrout          ; Write char to output device
-000020r 1  E8             inx
-000021r 1  4C rr rr       jmp Print
-000024r 1               @PrintEnd:
-000024r 1  A9 0D          lda #$0D            ; CR
-000026r 1  20 00 A0       jsr Chrout          ; Write char to output device
-000029r 1  A9 0A          lda #$0A            ; LF
-00002Br 1  20 00 A0       jsr Chrout          ; Write char to output device
-00002Er 1               
-00002Er 1               End:
-00002Er 1  60             rts                 ; Return to BASIC
-00002Fr 1               
-00002Fr 1               ; =============================================================================
-00002Fr 1               ;   Data
-00002Fr 1               ; =============================================================================
-00002Fr 1               
-00002Fr 1  48 65 6C 6C  Message: .asciiz "Hello, World!"
-000033r 1  6F 2C 20 57  
-000037r 1  6F 72 6C 64  
-00003Cr 1               
+000000r 1               LED         = $9400          ; 74HC373 LED latch
+000000r 1               DELAY_CS    = 10             ; delay in centiseconds (~100 ms per step)
+000000r 1               
+000000r 1               Start:
+000000r 1  A0 00          ldy #0
+000002r 1               Loop:
+000002r 1  B9 rr rr       lda Table,y
+000005r 1  8D 00 94       sta LED                    ; show current LED pattern
+000008r 1  5A             phy                        ; save index — SysDelay clobbers Y
+000009r 1  A9 0A          lda #DELAY_CS
+00000Br 1  A2 00          ldx #0                     ; SysDelay high byte
+00000Dr 1  20 75 A0       jsr SysDelay               ; wait ~100 ms
+000010r 1  7A             ply                        ; restore index
+000011r 1  C8             iny
+000012r 1  C0 0E          cpy #14                    ; 14 steps per sweep cycle (0..13)
+000014r 1  D0 EC          bne Loop
+000016r 1  80 E8          bra Start                  ; restart sweep
+000018r 1               
+000018r 1               Table:
+000018r 1  01 02 04 08    .byte $01,$02,$04,$08,$10,$20,$40,$80  ; sweep left  → right
+00001Cr 1  10 20 40 80  
+000020r 1  40 20 10 08    .byte $40,$20,$10,$08,$04,$02          ; sweep right → left
+000024r 1  04 02        
+000025r 1               
