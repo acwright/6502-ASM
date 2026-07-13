@@ -10,7 +10,7 @@ Current file: KIM LED Demo - Counter.asm
 000000r 2               ; =============================================================================
 000000r 2               ;
 000000r 2               ;   CPU:       WDC 65C02
-000000r 2               ;   BIOS:      v1.1
+000000r 2               ;   BIOS:      v1.2
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 000000r 2               ;
 000000r 2               ;   Include this file in external projects to access Kernal routines,
@@ -408,6 +408,16 @@ Current file: KIM LED Demo - Counter.asm
 000000r 2                                                        ;   Uses current CF_DISK
 000000r 2                                                        ;   Modifies: Flags, A, X, Y
 000000r 2               
+000000r 2               ; --- General Output Utilities (console routed by IO_MODE via Chrout) ---
+000000r 2               PrintStr            := $A090             ; Print a NUL-terminated string
+000000r 2                                                        ;   In : A = string addr low, Y = string addr high
+000000r 2                                                        ;   Modifies: Flags, A, Y, STR_PTR (X preserved)
+000000r 2               PrintCRLF           := $A093             ; Print CR ($0D) then LF ($0A)
+000000r 2                                                        ;   Modifies: Flags, A
+000000r 2               PrintDecU16         := $A096             ; Print an unsigned 16-bit value as decimal
+000000r 2                                                        ;   In : A = value low, X = value high (no leading zeros)
+000000r 2                                                        ;   Modifies: Flags, A, X, Y, FS_FILE_SIZE, FS_DIR_IDX
+000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
 000000r 2               ;   SECTION 5: IO HARDWARE REGISTERS
@@ -750,7 +760,7 @@ Current file: KIM LED Demo - Counter.asm
 000000r 2               
 000000r 2               ; --- BIOS Version ---
 000000r 2               BIOS_VERSION_MAJOR  = 1
-000000r 2               BIOS_VERSION_MINOR  = 1
+000000r 2               BIOS_VERSION_MINOR  = 2
 000000r 2               
 000000r 2               ; --- ASCII Control Characters ---
 000000r 2               CHAR_BEL            = $07                ; Bell (Beep via SID)
