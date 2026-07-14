@@ -4,7 +4,7 @@ CONFIG = 6502
 
 .PHONY: all clean
 
-all: build woz cf
+all: build woz
 
 build: $(TARGET).asm
 	cl65 -t none -C ../$(CONFIG).cfg -l $(TARGET).lst -o $(TARGET).prg $(TARGET).asm 
@@ -14,12 +14,6 @@ view:
 
 woz:
 	bin2woz -a 0x0800 $(TARGET).prg > $(TARGET).woz
-
-cf:
-	cffs create $(TARGET).img
-	cp $(TARGET).prg $(EIGHTTHREE).PRG
-	cffs add $(TARGET).img $(EIGHTTHREE).PRG
-	rm $(EIGHTTHREE).PRG
 
 clean:
 	rm $(TARGET).prg
