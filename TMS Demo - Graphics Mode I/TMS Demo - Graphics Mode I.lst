@@ -1,6 +1,6 @@
 ca65 V2.19 - Git 0fca83500
-Main file   : KIM LED Demo - KITT.asm
-Current file: KIM LED Demo - KITT.asm
+Main file   : TMS Demo - Graphics Mode I.asm
+Current file: TMS Demo - Graphics Mode I.asm
 
 000000r 1               .setcpu "65C02"
 000000r 1               
@@ -811,40 +811,327 @@ Current file: KIM LED Demo - KITT.asm
 000000r 1               .segment "CODE"
 000000r 1               
 000000r 1               ; =============================================================================
-000000r 1               ;   KIM LED Demo — KITT Scanner ($0800)
+000000r 1               ;   BASIC Startup Stub
 000000r 1               ; =============================================================================
-000000r 1               ;   Single LED bounces left and right on the 8 LEDs at $9400,
-000000r 1               ;   like the KITT scanner from Knight Rider.
-000000r 1               ;   Uses SysDelay (centiseconds) for ~100 ms per step.
-000000r 1               ;   Runs forever.
-000000r 1               ;
-000000r 1               ;   Machine code (38 bytes):
-000000r 1               ;     0800: A0 00 B9 18 08 8D 00 94 5A A9 0A A2 00 20 75 A0
-000000r 1               ;     0810: 7A C8 C0 0E D0 EC 80 E8
-000000r 1               ;     0818: 01 02 04 08 10 20 40 80 40 20 10 08 04 02
-000000r 1               ; =============================================================================
+000000r 1               ;   A tokenized BASIC line: 10 SYS 2060
+000000r 1               ;   When this program is loaded into $0800 and RUN in BASIC, the SYS command
+000000r 1               ;   jumps to the machine code entry point at $080C (decimal 2060).
+000000r 1               ;   This stub must remain at the very start of the program.
 000000r 1               
-000000r 1               LED         = $9400          ; 74HC373 LED latch
-000000r 1               DELAY_CS    = 10             ; delay in centiseconds (~100 ms per step)
-000000r 1               
-000000r 1               Start:
-000000r 1  A0 00          ldy #0
-000002r 1               Loop:
-000002r 1  B9 rr rr       lda Table,y
-000005r 1  8D 00 94       sta LED                    ; show current LED pattern
-000008r 1  5A             phy                        ; save index — SysDelay clobbers Y
-000009r 1  A9 0A          lda #DELAY_CS
-00000Br 1  A2 00          ldx #0                     ; SysDelay high byte
-00000Dr 1  20 75 A0       jsr SysDelay               ; wait ~100 ms
-000010r 1  7A             ply                        ; restore index
-000011r 1  C8             iny
-000012r 1  C0 0E          cpy #14                    ; 14 steps per sweep cycle (0..13)
-000014r 1  D0 EC          bne Loop
-000016r 1  80 E8          bra Start                  ; restart sweep
-000018r 1               
-000018r 1               Table:
-000018r 1  01 02 04 08    .byte $01,$02,$04,$08,$10,$20,$40,$80  ; sweep left  → right
-00001Cr 1  10 20 40 80  
-000020r 1  40 20 10 08    .byte $40,$20,$10,$08,$04,$02          ; sweep right → left
-000024r 1  04 02        
-000025r 1               
+000000r 1  0A 08 0A 00  BasicStartup: .byte $0A, $08, $0A, $00, $A5, $32, $30, $36, $30, $00, $00, $00
+000004r 1  A5 32 30 36  
+000008r 1  30 00 00 00  
+00000Cr 1               
+00000Cr 1               ; =============================================================================
+00000Cr 1               ;   TMS9918 Graphics Mode I Demo ($080C)
+00000Cr 1               ; =============================================================================
+00000Cr 1               ;   Builds a character set of 256 identical checkerboard patterns, gives the
+00000Cr 1               ;   colour table 32 different foreground/background pairs, and fills the
+00000Cr 1               ;   screen with random characters.  Waits for a key press, restores text mode,
+00000Cr 1               ;   and returns to BASIC.
+00000Cr 1               ;
+00000Cr 1               ;   GRAPHICS MODE I
+00000Cr 1               ;   ---------------
+00000Cr 1               ;   Selected by M1=0, M2=0, M3=0 (the plain graphics mode).  The screen is
+00000Cr 1               ;   32 x 24 cells of 8 x 8 pixels.  Each name table entry selects one of 256
+00000Cr 1               ;   patterns from the 2 KB pattern table.
+00000Cr 1               ;
+00000Cr 1               ;   Colour is coarse: the 32-byte colour table holds one entry per *group of
+00000Cr 1               ;   eight* patterns (high nibble = foreground, low nibble = background), so
+00000Cr 1               ;   characters $00-$07 share entry 0, $08-$0F share entry 1, and so on.
+00000Cr 1               ;   That gives exactly 32 colour combinations per screen — which is what this
+00000Cr 1               ;   demo shows off.  Since every pattern is the same checkerboard, the only
+00000Cr 1               ;   thing that varies across the screen is the colour pair.
+00000Cr 1               ; =============================================================================
+00000Cr 1               
+00000Cr 1               ; --- Zero page (safe user range is $3A-$FF) ---
+00000Cr 1               RND             = $3A               ; 2 bytes — PRNG state (must never be $0000)
+00000Cr 1               
+00000Cr 1               ; --- Screen geometry (the graphics modes are 32 columns wide, not 40) ---
+00000Cr 1               GFX_COLS        = 32
+00000Cr 1               GFX_ROWS        = VID_ROWS
+00000Cr 1               GFX_CELLS       = GFX_COLS * GFX_ROWS   ; 768 name table entries
+00000Cr 1               
+00000Cr 1               ; --- VRAM layout ---
+00000Cr 1               G1_NAME         = $0000             ; Name table         ($0000-$02FF, 768 bytes)
+00000Cr 1               G1_COLOR        = $0300             ; Colour table       ($0300-$031F, 32 bytes)
+00000Cr 1               G1_SPR_ATTR     = $0700             ; Sprite attributes  ($0700-$077F)
+00000Cr 1               G1_PATTERN      = $0800             ; Pattern table      ($0800-$0FFF, 2048 bytes)
+00000Cr 1               
+00000Cr 1               ; --- Register 1 values (16K VRAM, VDP interrupt off, Graphics mode) ---
+00000Cr 1               R1_BLANK        = %10000000         ; Display blanked — used while loading VRAM
+00000Cr 1               R1_ACTIVE       = %11000000         ; Display enabled
+00000Cr 1               
+00000Cr 1               RND_SEED        = $C33C             ; Fixed seed: the same screen every run
+00000Cr 1               
+00000Cr 1               ; =============================================================================
+00000Cr 1               ;   Start — Program entry point
+00000Cr 1               ; =============================================================================
+00000Cr 1               
+00000Cr 1               Start:
+00000Cr 1  AD 0D 03       lda HW_PRESENT
+00000Fr 1  29 80          and #HW_VID                       ; Is a video card present?
+000011r 1  D0 0B          bne @HaveVideo
+000013r 1  A9 rr          lda #<NoVideoMsg
+000015r 1  A0 rr          ldy #>NoVideoMsg
+000017r 1  20 90 A0       jsr PrintStr
+00001Ar 1  20 93 A0       jsr PrintCRLF
+00001Dr 1  60             rts                               ; Nothing to demo — back to BASIC
+00001Er 1               
+00001Er 1               @HaveVideo:
+00001Er 1  78             sei                               ; The Kernal IRQ handler must not touch the
+00001Fr 1                                                   ; VDP between our two-byte port writes
+00001Fr 1  20 rr rr       jsr InitRandom
+000022r 1  20 rr rr       jsr InitMode                      ; Mode registers, display still blanked
+000025r 1  20 rr rr       jsr HideSprites
+000028r 1  20 rr rr       jsr FillPatterns                  ; 256 copies of the checkerboard
+00002Br 1  20 rr rr       jsr FillColors                    ; 32 foreground/background pairs
+00002Er 1  20 rr rr       jsr FillNames                     ; Random character in every cell
+000031r 1  20 rr rr       jsr ShowDisplay
+000034r 1  58             cli
+000035r 1               
+000035r 1  20 rr rr       jsr WaitKey                       ; Needs interrupts — input is IRQ driven
+000038r 1               
+000038r 1  78             sei
+000039r 1  20 15 A0       jsr InitVideo                     ; Restore the BIOS text mode
+00003Cr 1  20 18 A0       jsr VideoClear
+00003Fr 1  58             cli
+000040r 1               
+000040r 1               End:
+000040r 1  60             rts                               ; Return to BASIC
+000041r 1               
+000041r 1               ; =============================================================================
+000041r 1               ;   InitMode — Load the VDP registers for Graphics Mode I
+000041r 1               ; =============================================================================
+000041r 1               
+000041r 1               InitMode:
+000041r 1  AD 01 9C       lda VC_STATUS                     ; Reset the VDP address/data flip-flop
+000044r 1  A2 00          ldx #0
+000046r 1               @Loop:
+000046r 1  BD rr rr       lda VdpRegs,x
+000049r 1  8D 01 9C       sta VC_REG                        ; Data byte first...
+00004Cr 1  8A             txa
+00004Dr 1  09 80          ora #$80                          ; ...then register number | $80
+00004Fr 1  8D 01 9C       sta VC_REG
+000052r 1  E8             inx
+000053r 1  E0 08          cpx #8
+000055r 1  D0 EF          bne @Loop
+000057r 1  60             rts
+000058r 1               
+000058r 1               ; =============================================================================
+000058r 1               ;   ShowDisplay — Un-blank the display now that VRAM is loaded
+000058r 1               ; =============================================================================
+000058r 1               
+000058r 1               ShowDisplay:
+000058r 1  A9 C0          lda #R1_ACTIVE
+00005Ar 1  A2 01          ldx #1
+00005Cr 1  4C rr rr       jmp SetVdpReg
+00005Fr 1               
+00005Fr 1               ; =============================================================================
+00005Fr 1               ;   HideSprites — Terminate the sprite list so no sprites are drawn
+00005Fr 1               ; =============================================================================
+00005Fr 1               
+00005Fr 1               HideSprites:
+00005Fr 1  A9 00          lda #<G1_SPR_ATTR
+000061r 1  A2 07          ldx #>G1_SPR_ATTR
+000063r 1  20 rr rr       jsr SetVramWrite
+000066r 1  A9 D0          lda #$D0                          ; Y = $D0 ends the sprite list
+000068r 1  8D 00 9C       sta VC_DATA
+00006Br 1  60             rts
+00006Cr 1               
+00006Cr 1               ; =============================================================================
+00006Cr 1               ;   FillPatterns — Give all 256 characters the same checkerboard pattern
+00006Cr 1               ; =============================================================================
+00006Cr 1               ;   256 patterns x 8 bytes = 2048 bytes.
+00006Cr 1               
+00006Cr 1               FillPatterns:
+00006Cr 1  A9 00          lda #<G1_PATTERN
+00006Er 1  A2 08          ldx #>G1_PATTERN
+000070r 1  20 rr rr       jsr SetVramWrite
+000073r 1  A0 00          ldy #0                            ; 256 patterns (Y wraps to 0)
+000075r 1               @Pattern:
+000075r 1  A2 00          ldx #0
+000077r 1               @Row:
+000077r 1  BD rr rr       lda Checker,x
+00007Ar 1  8D 00 9C       sta VC_DATA
+00007Dr 1  E8             inx
+00007Er 1  E0 08          cpx #8
+000080r 1  D0 F5          bne @Row
+000082r 1  88             dey
+000083r 1  D0 F0          bne @Pattern
+000085r 1  60             rts
+000086r 1               
+000086r 1               ; =============================================================================
+000086r 1               ;   FillColors — One foreground/background pair per group of 8 characters
+000086r 1               ; =============================================================================
+000086r 1               
+000086r 1               FillColors:
+000086r 1  A9 00          lda #<G1_COLOR
+000088r 1  A2 03          ldx #>G1_COLOR
+00008Ar 1  20 rr rr       jsr SetVramWrite
+00008Dr 1  A2 00          ldx #0
+00008Fr 1               @Loop:
+00008Fr 1  BD rr rr       lda Colors,x
+000092r 1  8D 00 9C       sta VC_DATA
+000095r 1  E8             inx
+000096r 1  E0 20          cpx #32
+000098r 1  D0 F5          bne @Loop
+00009Ar 1  60             rts
+00009Br 1               
+00009Br 1               ; =============================================================================
+00009Br 1               ;   FillNames — Put a random character in every screen cell
+00009Br 1               ; =============================================================================
+00009Br 1               ;   768 bytes = 3 x 256.  A random character code picks a random colour group.
+00009Br 1               
+00009Br 1               FillNames:
+00009Br 1  A9 00          lda #<G1_NAME
+00009Dr 1  A2 00          ldx #>G1_NAME
+00009Fr 1  20 rr rr       jsr SetVramWrite
+0000A2r 1  A2 03          ldx #GFX_CELLS / 256              ; 3 blocks of 256 bytes
+0000A4r 1               @Block:
+0000A4r 1  A0 00          ldy #0
+0000A6r 1               @Byte:
+0000A6r 1  20 rr rr       jsr Random
+0000A9r 1  8D 00 9C       sta VC_DATA
+0000ACr 1  C8             iny
+0000ADr 1  D0 F7          bne @Byte
+0000AFr 1  CA             dex
+0000B0r 1  D0 F2          bne @Block
+0000B2r 1  60             rts
+0000B3r 1               
+0000B3r 1               ; =============================================================================
+0000B3r 1               ;   VDP Helpers
+0000B3r 1               ; =============================================================================
+0000B3r 1               
+0000B3r 1               ; SetVdpReg — write a VDP register
+0000B3r 1               ;   In: A = value, X = register number (0-7)
+0000B3r 1               SetVdpReg:
+0000B3r 1  8D 01 9C       sta VC_REG
+0000B6r 1  8A             txa
+0000B7r 1  09 80          ora #$80
+0000B9r 1  8D 01 9C       sta VC_REG
+0000BCr 1  60             rts
+0000BDr 1               
+0000BDr 1               ; SetVramWrite — set the VRAM address for auto-incrementing writes
+0000BDr 1               ;   In: A = address low byte, X = address high byte
+0000BDr 1               SetVramWrite:
+0000BDr 1  8D 01 9C       sta VC_REG
+0000C0r 1  8A             txa
+0000C1r 1  09 40          ora #$40                          ; $40 flags a write
+0000C3r 1  8D 01 9C       sta VC_REG
+0000C6r 1  60             rts
+0000C7r 1               
+0000C7r 1               ; =============================================================================
+0000C7r 1               ;   Random — 16-bit xorshift PRNG
+0000C7r 1               ; =============================================================================
+0000C7r 1               ;   Out: A = pseudo-random byte.  Preserves X and Y.
+0000C7r 1               
+0000C7r 1               InitRandom:
+0000C7r 1  A9 3C          lda #<RND_SEED
+0000C9r 1  85 3A          sta RND
+0000CBr 1  A9 C3          lda #>RND_SEED
+0000CDr 1  85 3B          sta RND+1
+0000CFr 1  60             rts
+0000D0r 1               
+0000D0r 1               Random:
+0000D0r 1  A5 3B          lda RND+1
+0000D2r 1  4A             lsr a
+0000D3r 1  A5 3A          lda RND
+0000D5r 1  6A             ror a
+0000D6r 1  45 3B          eor RND+1
+0000D8r 1  85 3B          sta RND+1
+0000DAr 1  6A             ror a
+0000DBr 1  45 3A          eor RND
+0000DDr 1  85 3A          sta RND
+0000DFr 1  45 3B          eor RND+1
+0000E1r 1  85 3B          sta RND+1
+0000E3r 1  60             rts
+0000E4r 1               
+0000E4r 1               ; =============================================================================
+0000E4r 1               ;   WaitKey — Discard pending input, then block until a key is pressed
+0000E4r 1               ; =============================================================================
+0000E4r 1               
+0000E4r 1               WaitKey:
+0000E4r 1  20 0C A0       jsr BufferSize                    ; A = unread bytes in the input buffer
+0000E7r 1  C9 00          cmp #0
+0000E9r 1  F0 05          beq @Wait
+0000EBr 1  20 09 A0       jsr ReadBuffer                    ; Drain stale input (no echo)
+0000EEr 1  80 F4          bra WaitKey
+0000F0r 1               @Wait:
+0000F0r 1  20 0C A0       jsr BufferSize
+0000F3r 1  C9 00          cmp #0
+0000F5r 1  F0 F9          beq @Wait
+0000F7r 1  20 09 A0       jsr ReadBuffer
+0000FAr 1  60             rts
+0000FBr 1               
+0000FBr 1               ; =============================================================================
+0000FBr 1               ;   Data
+0000FBr 1               ; =============================================================================
+0000FBr 1               
+0000FBr 1               ; VDP registers 0-7
+0000FBr 1               VdpRegs:
+0000FBr 1  00             .byte $00                         ; R0: M3=0, no external video
+0000FCr 1  80             .byte R1_BLANK                    ; R1: 16K, blanked, Graphics Mode I
+0000FDr 1  00             .byte $00                         ; R2: name table         @ $0000
+0000FEr 1  0C             .byte $0C                         ; R3: colour table       @ $0300
+0000FFr 1  01             .byte $01                         ; R4: pattern table      @ $0800
+000100r 1  0E             .byte $0E                         ; R5: sprite attributes  @ $0700
+000101r 1  01             .byte $01                         ; R6: sprite patterns    @ $0800
+000102r 1  01             .byte TMS_BLACK                   ; R7: backdrop colour
+000103r 1               
+000103r 1               ; The one and only character: a single-pixel checkerboard filling the 8x8 cell,
+000103r 1               ; so every cell reads as one textured tile in its own two colours.
+000103r 1               ;
+000103r 1               ; The 1x1 grain matters — Multicolor mode cannot draw anything finer than a 4x4
+000103r 1               ; block, so resolving this texture at all confirms the VDP really is in Graphics
+000103r 1               ; Mode I and not falling back to Multicolor.
+000103r 1               Checker:
+000103r 1  55             .byte %01010101
+000104r 1  AA             .byte %10101010
+000105r 1  55             .byte %01010101
+000106r 1  AA             .byte %10101010
+000107r 1  55             .byte %01010101
+000108r 1  AA             .byte %10101010
+000109r 1  55             .byte %01010101
+00010Ar 1  AA             .byte %10101010
+00010Br 1               
+00010Br 1               ; 32 colour table entries — (foreground << 4) | background.
+00010Br 1               ; Entry n colours characters (n * 8) through (n * 8 + 7).
+00010Br 1               Colors:
+00010Br 1  F1             .byte (TMS_WHITE     << 4) | TMS_BLACK        ; chars $00-$07
+00010Cr 1  1F             .byte (TMS_BLACK     << 4) | TMS_WHITE        ; chars $08-$0F
+00010Dr 1  21             .byte (TMS_MED_GREEN << 4) | TMS_BLACK        ; chars $10-$17
+00010Er 1  12             .byte (TMS_BLACK     << 4) | TMS_MED_GREEN    ; chars $18-$1F
+00010Fr 1  3C             .byte (TMS_LT_GREEN  << 4) | TMS_DK_GREEN
+000110r 1  C3             .byte (TMS_DK_GREEN  << 4) | TMS_LT_GREEN
+000111r 1  45             .byte (TMS_DK_BLUE   << 4) | TMS_LT_BLUE
+000112r 1  54             .byte (TMS_LT_BLUE   << 4) | TMS_DK_BLUE
+000113r 1  69             .byte (TMS_DK_RED    << 4) | TMS_LT_RED
+000114r 1  96             .byte (TMS_LT_RED    << 4) | TMS_DK_RED
+000115r 1  74             .byte (TMS_CYAN      << 4) | TMS_DK_BLUE
+000116r 1  47             .byte (TMS_DK_BLUE   << 4) | TMS_CYAN
+000117r 1  8B             .byte (TMS_MED_RED   << 4) | TMS_LT_YELLOW
+000118r 1  B8             .byte (TMS_LT_YELLOW << 4) | TMS_MED_RED
+000119r 1  AC             .byte (TMS_DK_YELLOW << 4) | TMS_DK_GREEN
+00011Ar 1  CA             .byte (TMS_DK_GREEN  << 4) | TMS_DK_YELLOW
+00011Br 1  DE             .byte (TMS_MAGENTA   << 4) | TMS_GRAY
+00011Cr 1  ED             .byte (TMS_GRAY      << 4) | TMS_MAGENTA
+00011Dr 1  F4             .byte (TMS_WHITE     << 4) | TMS_DK_BLUE
+00011Er 1  4F             .byte (TMS_DK_BLUE   << 4) | TMS_WHITE
+00011Fr 1  31             .byte (TMS_LT_GREEN  << 4) | TMS_BLACK
+000120r 1  13             .byte (TMS_BLACK     << 4) | TMS_LT_GREEN
+000121r 1  7D             .byte (TMS_CYAN      << 4) | TMS_MAGENTA
+000122r 1  D7             .byte (TMS_MAGENTA   << 4) | TMS_CYAN
+000123r 1  B6             .byte (TMS_LT_YELLOW << 4) | TMS_DK_RED
+000124r 1  6B             .byte (TMS_DK_RED    << 4) | TMS_LT_YELLOW
+000125r 1  E1             .byte (TMS_GRAY      << 4) | TMS_BLACK
+000126r 1  1E             .byte (TMS_BLACK     << 4) | TMS_GRAY
+000127r 1  9C             .byte (TMS_LT_RED    << 4) | TMS_DK_GREEN
+000128r 1  C9             .byte (TMS_DK_GREEN  << 4) | TMS_LT_RED
+000129r 1  F8             .byte (TMS_WHITE     << 4) | TMS_MED_RED
+00012Ar 1  8F             .byte (TMS_MED_RED   << 4) | TMS_WHITE        ; chars $F8-$FF
+00012Br 1               
+00012Br 1  4E 6F 20 76  NoVideoMsg: .asciiz "No video card present."
+00012Fr 1  69 64 65 6F  
+000133r 1  20 63 61 72  
+000141r 1               
