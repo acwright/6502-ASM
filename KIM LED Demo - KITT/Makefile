@@ -4,7 +4,7 @@ CONFIG = 6502
 
 .PHONY: all clean
 
-all: build woz cf
+all: build woz
 
 build: $(TARGET).asm
 	cl65 -t none -C ../$(CONFIG).cfg -l $(TARGET).lst -o $(TARGET).prg $(TARGET).asm 
