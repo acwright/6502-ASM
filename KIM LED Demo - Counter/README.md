@@ -17,6 +17,10 @@ View:
 
     make view
 
+Run:
+
+    make run
+
 ## Machine Code
 
 | Address | Bytes          | Instruction         |

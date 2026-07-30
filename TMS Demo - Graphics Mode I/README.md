@@ -62,3 +62,7 @@ Build:
 View:
 
     make view
+
+Run:
+
+    make run

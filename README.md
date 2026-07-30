@@ -56,11 +56,16 @@ The `cffs` tool is used to create CompactFlash disk images and add files to them
 
 For more information, see the [cffs project](https://github.com/acwright/cffs).
 
+#### 6502 CLI
+
+Installed via the [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) app's Settings → Command Line → Install. Required for the `make run` target.
+
 ### Available Targets
 
 - `make` or `make all` - Build the program
 - `make view` - Display hexdump of the built program
 - `make woz` - Create a Wozmon compatible file using [bin2woz](https://github.com/acwright/bin2woz)
+- `make run` - Launch the emulator app with the built program loaded
 - `make clean` - Remove build artifacts
 
 ### Example
@@ -70,5 +75,6 @@ cd <directory-name>
 make        # Build the program
 make view   # View the hexdump
 make woz    # Create a Wozmon compatible file
+make run    # Launch the emulator
 ```
 
