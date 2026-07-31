@@ -78,3 +78,20 @@ make woz    # Create a Wozmon compatible file
 make run    # Launch the emulator
 ```
 
+Each program includes `6502.inc`, the shared include file describing the Kernal
+jump table, hardware registers, and system constants. It tracks the published
+API of the [BIOS](https://github.com/acwright/6502-BIOS) and is kept identical
+across the repositories that ship a copy.
+
+## Related
+
+- [6502-ACE](https://github.com/acwright/6502-ACE) — the hardware, and the index of the whole family
+- [6502-BIOS](https://github.com/acwright/6502-BIOS) — the firmware behind `6502.inc`
+- [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) — run these programs without hardware
+- [6502-PRG](https://github.com/acwright/6502-PRG) — template for starting a new assembly program
+- [6502-CRT](https://github.com/acwright/6502-CRT) — template for starting a new cartridge
+- [6502-BAS](https://github.com/acwright/6502-BAS) — the same idea for BASIC listings
+
+## License
+
+MIT License — see [LICENSE](LICENSE).
