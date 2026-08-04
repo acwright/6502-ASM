@@ -2,6 +2,8 @@
 ========
 
 Assembly code for the [A.C. Wright 6502](https://github.com/acwright/6502-ACE) family of computer systems.
+> 📖 **Guide:** [AC6502 Documentation](https://acwright.github.io/6502-DOCS/) — the user's and programmer's guide for the whole family.
+> Several of these programs are walked through line by line in [Worked projects](https://acwright.github.io/6502-DOCS/assembly/projects).
 
 ## Building Programs
 
@@ -91,6 +93,7 @@ across the repositories that ship a copy.
 - [6502-PRG](https://github.com/acwright/6502-PRG) — template for starting a new assembly program
 - [6502-CRT](https://github.com/acwright/6502-CRT) — template for starting a new cartridge
 - [6502-BAS](https://github.com/acwright/6502-BAS) — the same idea for BASIC listings
+- [6502-DOCS](https://github.com/acwright/6502-DOCS) — the documentation site: the assembly guide these programs illustrate
 
 ## License
 
