@@ -1,4 +1,4 @@
-TARGET = Bit\ Rally
+TARGET = BitRally
 CONFIG = 6502
 LOAD = 0x0800
 

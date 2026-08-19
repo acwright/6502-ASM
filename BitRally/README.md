@@ -128,7 +128,7 @@ frame of dwell at each end; both change the feel a lot.
 
 - The countdown is written here as a symmetric converge, `$81` `$42` `$24` `$18`. The
   series plan says "`$81`, `$62`, …", which isn't symmetric — if `$62` was deliberate,
-  the table in `Bit Rally.asm` is the only thing that needs editing.
+  the table in `BitRally.asm` is the only thing that needs editing.
 - With no miss penalty, mashing both keys is a viable strategy. Draining the buffer
   each frame at least forces the press to land inside the zone's own frame, but if you
   want it properly punished, the usual fix is a short lockout: a press outside your
@@ -138,7 +138,7 @@ frame of dwell at each end; both change the feel a lot.
 ## Tuning
 
 All timings are in centiseconds (10 ms units), the `SysDelay` unit, and live at the
-top of [Bit Rally.asm](<Bit Rally.asm>):
+top of [BitRally.asm](BitRally.asm):
 
 | Constant | Default | Effect |
 |---|---|---|

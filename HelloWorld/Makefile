@@ -1,4 +1,4 @@
-TARGET = Hello\ World
+TARGET = HelloWorld
 EIGHTTHREE = HELLOWLD
 CONFIG = 6502
 
@@ -20,12 +20,11 @@ woz:
 
 cf:
 	cffs create $(TARGET).img --size 1M
-	cp $(TARGET).prg $(EIGHTTHREE).PRG
-	cffs add $(TARGET).img $(EIGHTTHREE).PRG
-	rm $(EIGHTTHREE).PRG
+	mkdir -p .cf
+	cp -f $(TARGET).prg .cf/$(EIGHTTHREE).PRG
+	cffs add $(TARGET).img .cf/$(EIGHTTHREE).PRG
+	rm -rf .cf
 
 clean:
-	rm $(TARGET).prg
-	rm $(TARGET).woz
-	rm $(TARGET).lst
-	rm $(TARGET).img
+	rm -rf .cf
+	rm -f $(TARGET).prg $(TARGET).woz $(TARGET).lst $(TARGET).img

@@ -1,6 +1,6 @@
 ca65 V2.19 - Git 547d92358
-Main file   : Hello World.asm
-Current file: Hello World.asm
+Main file   : BitRally.asm
+Current file: BitRally.asm
 
 000000r 1               .setcpu "65C02"
 000000r 1               
@@ -884,56 +884,503 @@ Current file: Hello World.asm
 000000r 1               .segment "CODE"
 000000r 1               
 000000r 1               ; =============================================================================
-000000r 1               ;   BASIC Startup Stub
+000000r 1               ;   Bit Rally — a two-ended Kill the Bit for the AC6502 KIM
 000000r 1               ; =============================================================================
-000000r 1               ;   A tokenized BASIC line: 10 SYS 2060
-000000r 1               ;   When this program is loaded into $0800 and RUN in BASIC, the SYS command
-000000r 1               ;   jumps to the machine code entry point at $080C (decimal 2060).
-000000r 1               ;   This stub must remain at the very start of the program.
+000000r 1               ;   This is a raw binary image, not a BASIC program.  There is no tokenized
+000000r 1               ;   startup stub: the first byte of the file is the first byte of code, and it
+000000r 1               ;   lands at $0800 (PROGRAM_START).  Nothing may be placed before Start —
+000000r 1               ;   put data after the code, or behind a jump.
+000000r 1               ;
+000000r 1               ;   Target is the AC6502 KIM.  The Keypad Card overlays $C000-$FFFF, so the
+000000r 1               ;   machine boots into the KC Monitor rather than BASIC:
+000000r 1               ;     - No video, no sound, no storage, no RTC, no VIA (HW_PRESENT is $10)
+000000r 1               ;     - Chrout goes to the serial port; the LCD belongs to the monitor
+000000r 1               ;     - The eight LEDs are a write-only 74HC373 latch on the accessory bus
+000000r 1               ;     - ESC aborts a running program from anywhere — that needs no code here
+000000r 1               ;
+000000r 1               ;   Launching:
+000000r 1               ;     Keypad   $0800 then UP   calls here; RTS returns to the KC Monitor
+000000r 1               ;     Wozmon   0800R           jumps here; nothing to return to
+000000r 1               ;
+000000r 1               ;   ESC is the way out, and it is unconditional.  KeyIrq catches it before it
+000000r 1               ;   reaches the mailbox — from the pad or as an ESC byte over serial — and
+000000r 1               ;   JMPs to WarmStart, which does LDX #$FF / TXS and re-enters the monitor
+000000r 1               ;   loop.  The interrupted frame is abandoned, so it does not matter how deep
+000000r 1               ;   you were, what you had pushed, or how you were launched.  It also means
+000000r 1               ;   ESC does not return to your caller: it lands in the KC Monitor, always.
+000000r 1               ; =============================================================================
+000000r 1               ;   THE GAME
+000000r 1               ; =============================================================================
+000000r 1               ;   One bit sweeps across the eight LEDs.  Each end of the row is a kill zone
+000000r 1               ;   belonging to a player:
+000000r 1               ;
+000000r 1               ;     LED   7  6  5  4  3  2  1  0
+000000r 1               ;           ^                    ^
+000000r 1               ;           |                    |
+000000r 1               ;        LEFT kills           RIGHT kills
+000000r 1               ;        here with ◄          here with ►
+000000r 1               ;
+000000r 1               ;   A hit is a press made while the bit is standing in that player's zone —
+000000r 1               ;   ◄ while the pattern is $80, or ► while it is $01.  Anything else is
+000000r 1               ;   ignored: the wrong key, the right key a frame early, the right key in the
+000000r 1               ;   other player's zone.  Unlike the original Kill the Bit there is no penalty
+000000r 1               ;   for missing; a miss costs only the lap.
+000000r 1               ;
+000000r 1               ;   Two players, or one taking both ends.  The game never knows how many hands
+000000r 1               ;   are on the pad — it only knows which end got hit.
+000000r 1               ;
+000000r 1               ;   SCORING.  The score is one byte, packed as two nibbles, shown on the LEDs
+000000r 1               ;   between rounds:
+000000r 1               ;
+000000r 1               ;     %1111 1111
+000000r 1               ;      ^^^^ ^^^^
+000000r 1               ;      left right
+000000r 1               ;
+000000r 1               ;   First side to $F wins.  A nibble holds 0-15, so the win must be settled
+000000r 1               ;   at $F — incrementing a nibble that already reads $F carries into the other
+000000r 1               ;   player's score and corrupts it.
+000000r 1               ;
+000000r 1               ;   ROUND FLOW.
+000000r 1               ;     1. COUNTDOWN   the converging pattern below, one step per COUNT_TIME
+000000r 1               ;     2. SWEEP       the bit ping-pongs, one step per SWEEP_DELAY, until a hit
+000000r 1               ;     3. HIT         the packed score is displayed for SCORE_TIME
+000000r 1               ;     4. WIN         at $F, the final score flashes WIN_FLASHES times and the
+000000r 1               ;                    game restarts from zero
+000000r 1               ;
+000000r 1               ;   The score is only on the LEDs during step 3 — while the bit is sweeping,
+000000r 1               ;   the display belongs to the bit.  The countdown also runs once at startup,
+000000r 1               ;   before the first sweep, so nobody is caught cold.
+000000r 1               ;
+000000r 1               ;   THE SWEEP ping-pongs.  The bit runs to one end, and the frame it spends in
+000000r 1               ;   that kill zone is also the frame it turns around on; it then runs back to
+000000r 1               ;   the other end.  Seven steps between the zones, fourteen for a round trip,
+000000r 1               ;   so a zone you have just missed is a long way off — and you can watch the
+000000r 1               ;   bit coming at you the whole way.
+000000r 1               ;
+000000r 1               ;   Every round is dealt fresh: a random starting position AND a random
+000000r 1               ;   starting direction.  The entropy is the player's own reaction time, since
+000000r 1               ;   the KIM has no RTC and no VIA timer to read — a free-running counter
+000000r 1               ;   ticked once per frame and sampled at the moment of the hit is enough.  One
+000000r 1               ;   sample gives both: bits 0-2 are the position, bit 3 is the direction.
+000000r 1               ;
+000000r 1               ;   Clamp the starting position inward with POS_MIN / POS_MAX.  A bit that
+000000r 1               ;   starts life already standing in a kill zone hands that player a free point
+000000r 1               ;   on frame one, before they have even seen where it is.
+000000r 1               ;
+000000r 1               ;   INPUT comes from the KC Monitor's mailbox, NOT from Chrin — see the
+000000r 1               ;   Keypad section below.  The mailbox is one press deep and holds that press
+000000r 1               ;   indefinitely, so clear KEY_READY every frame whether it mattered or not.
+000000r 1               ;   A press left sitting from three frames ago must not be allowed to score
+000000r 1               ;   when the bit finally arrives.
+000000r 1               ; =============================================================================
 000000r 1               
-000000r 1  0A 08 0A 00  BasicStartup: .byte $0A, $08, $0A, $00, $A5, $32, $30, $36, $30, $00, $00, $00
-000004r 1  A5 32 30 36  
-000008r 1  30 00 00 00  
-00000Cr 1               
-00000Cr 1               ; =============================================================================
-00000Cr 1               ;   Start — Program entry point ($080C)
-00000Cr 1               ; =============================================================================
-00000Cr 1               ;   The system is already fully initialized when your program runs:
-00000Cr 1               ;     - Hardware probed and initialized (HW_PRESENT is set)
-00000Cr 1               ;     - Interrupts enabled, keyboard active
-00000Cr 1               ;     - IO_MODE set (video or serial console)
-00000Cr 1               ;     - All Kernal jump table routines available
-00000Cr 1               ;
-00000Cr 1               ;   Return to BASIC with RTS.
-00000Cr 1               ; =============================================================================
-00000Cr 1               
-00000Cr 1               Start:
-00000Cr 1  A9 0D          lda #$0D            ; CR
-00000Er 1  20 00 A0       jsr Chrout          ; Write char to output device
-000011r 1  A9 0A          lda #$0A            ; LF
-000013r 1  20 00 A0       jsr Chrout          ; Write char to output device
-000016r 1               
-000016r 1  A2 00          ldx #0
-000018r 1               Print:
-000018r 1  BD rr rr       lda Message,x
-00001Br 1  F0 07          beq @PrintEnd
-00001Dr 1  20 00 A0       jsr Chrout          ; Write char to output device
-000020r 1  E8             inx
-000021r 1  4C rr rr       jmp Print
-000024r 1               @PrintEnd:
-000024r 1  A9 0D          lda #$0D            ; CR
-000026r 1  20 00 A0       jsr Chrout          ; Write char to output device
-000029r 1  A9 0A          lda #$0A            ; LF
-00002Br 1  20 00 A0       jsr Chrout          ; Write char to output device
-00002Er 1               
-00002Er 1               End:
-00002Er 1  60             rts                 ; Return to BASIC
-00002Fr 1               
-00002Fr 1               ; =============================================================================
-00002Fr 1               ;   Data
-00002Fr 1               ; =============================================================================
-00002Fr 1               
-00002Fr 1  48 65 6C 6C  Message: .asciiz "Hello, World!"
-000033r 1  6F 2C 20 57  
-000037r 1  6F 72 6C 64  
-00003Cr 1               
+000000r 1               ; =============================================================================
+000000r 1               ;   Hardware
+000000r 1               ; =============================================================================
+000000r 1               
+000000r 1               LEDS := $9400                   ; Accessory bus — eight LEDs behind a 74HC373
+000000r 1                                               ; latch.  Write-only: a read is open bus.
+000000r 1               
+000000r 1               ; =============================================================================
+000000r 1               ;   Zero page
+000000r 1               ; =============================================================================
+000000r 1               ;   Not the whole of $3A-$FF, whatever the BIN template says.  That is true of
+000000r 1               ;   a machine running nothing underneath you; here the KC Monitor is live and
+000000r 1               ;   keeps its own state in the "free" user page:
+000000r 1               ;
+000000r 1               ;     $00-$39   Kernal
+000000r 1               ;     $3A-$3F   yours
+000000r 1               ;     $40-$45   KC Monitor — CUR_ADDR, MODE, MON_TMP, KEY_CODE, KEY_READY
+000000r 1               ;     $46-$51   KC Monitor — serial Wozmon parser and RX ring indices
+000000r 1               ;     $52-$FF   yours
+000000r 1               ;
+000000r 1               ;   Also live below $0800: $0200 is the monitor's Wozmon line buffer and
+000000r 1               ;   $0400-$04FF its serial RX ring.  Neither is in our way at $0800.
+000000r 1               ; =============================================================================
+000000r 1               
+000000r 1               ; =============================================================================
+000000r 1               ;   Keypad — read the KC Monitor's mailbox, not Chrin
+000000r 1               ; =============================================================================
+000000r 1               ;   Chrin is not the way in on this machine.  CartReset repoints IRQ_PTR at
+000000r 1               ;   the cartridge's own KeyIrq, and KeyIrq never calls WriteBuffer — so the
+000000r 1               ;   Kernal ring at $0200 is never fed, and Chrin returns C=0 forever.  Serial
+000000r 1               ;   bytes go the same way, into the monitor's own ring at $0400.
+000000r 1               ;
+000000r 1               ;   KeyIrq latches the keycode into a one-deep mailbox instead:
+000000r 1               ;
+000000r 1               ;     lda KEY_READY
+000000r 1               ;     beq @NoKey
+000000r 1               ;     sei                       ; take both bytes without racing KeyIrq
+000000r 1               ;     lda KEY_CODE
+000000r 1               ;     stz KEY_READY
+000000r 1               ;     cli                       ; NEVER leave I set — ESC dies with it
+000000r 1               ;
+000000r 1               ;   These are the cartridge's own zero-page variables rather than a published
+000000r 1               ;   API, and they are still the lesser evil: KeyPoll sits in ROM with no
+000000r 1               ;   jump-table entry, so calling it means hardcoding an address that moves on
+000000r 1               ;   every firmware build.
+000000r 1               ; =============================================================================
+000000r 1               
+000000r 1               KEY_CODE  := $44                ; Last keycode latched by KeyIrq
+000000r 1               KEY_READY := $45                ; Nonzero when a press is waiting
+000000r 1               
+000000r 1               ; The code is not the value.  These come off the MM74C922 encoder in the order
+000000r 1               ; the switches sit on the board — see the keypad map in 6502-DOCS.  ESC ($10)
+000000r 1               ; never reaches the mailbox: KeyIrq takes it and jumps to WarmStart.
+000000r 1               
+000000r 1               KEY_LEFT  = $00                 ; ◄
+000000r 1               KEY_RIGHT = $0B                 ; ►
+000000r 1               
+000000r 1               ; =============================================================================
+000000r 1               ;   Scoring
+000000r 1               ; =============================================================================
+000000r 1               
+000000r 1               SCORE_WIN   = $0F               ; First nibble to reach this wins
+000000r 1               MASK_LEFT   = %11110000         ; Left player's nibble
+000000r 1               MASK_RIGHT  = %00001111         ; Right player's nibble
+000000r 1               INC_LEFT    = $10               ; One point in the upper nibble
+000000r 1               INC_RIGHT   = $01               ; One point in the lower nibble
+000000r 1               
+000000r 1               ; =============================================================================
+000000r 1               ;   Kill zones
+000000r 1               ; =============================================================================
+000000r 1               ;   The bit turns around on the same frame it is killable.
+000000r 1               
+000000r 1               ZONE_LEFT  = %10000000          ; $80 — LED 7, killed with ◄
+000000r 1               ZONE_RIGHT = %00000001          ; $01 — LED 0, killed with ►
+000000r 1               
+000000r 1               ; =============================================================================
+000000r 1               ;   Sweep direction
+000000r 1               ; =============================================================================
+000000r 1               ;   Valued to drop straight out of the frame counter: AND #DIR_MASK gives one
+000000r 1               ;   or the other with no further work.
+000000r 1               ; =============================================================================
+000000r 1               
+000000r 1               DIR_MASK  = %00001000           ; Counter bit 3 -> starting direction
+000000r 1               DIR_LEFT  = %00000000           ; Travelling toward LED 7 — ASL
+000000r 1               DIR_RIGHT = %00001000           ; Travelling toward LED 0 — LSR
+000000r 1               
+000000r 1               ; =============================================================================
+000000r 1               ;   Starting position
+000000r 1               ; =============================================================================
+000000r 1               
+000000r 1               POS_MASK = %00000111            ; Counter bits 0-2 -> position 0-7
+000000r 1               POS_MIN  = 1                    ; Clamped inward, so the bit never starts
+000000r 1               POS_MAX  = 6                    ; life inside a kill zone
+000000r 1               
+000000r 1               ; =============================================================================
+000000r 1               ;   Timing — all in centiseconds (10 ms units), the SysDelay unit
+000000r 1               ; =============================================================================
+000000r 1               
+000000r 1               SWEEP_DELAY = 8                 ; Per LED step.  The difficulty knob: seven
+000000r 1                                               ; steps end to end, so 560 ms between zones
+000000r 1               COUNT_TIME  = 40                ; Per countdown step
+000000r 1               SCORE_TIME  = 75                ; How long the score sits on the LEDs
+000000r 1               WIN_TIME    = 20                ; Per flash phase, on and off
+000000r 1               WIN_FLASHES = 6                 ; Flashes before the game restarts
+000000r 1               
+000000r 1               ; =============================================================================
+000000r 1               ;   Start — Program entry point ($0800)
+000000r 1               ; =============================================================================
+000000r 1               Start:
+000000r 1  A9 00          lda #0
+000002r 1  8D rr rr       sta Score
+000005r 1               
+000005r 1               ; =============================================================================
+000005r 1               ;   Do Round — The entry point for each round
+000005r 1               ; =============================================================================
+000005r 1               
+000005r 1               DoRound:
+000005r 1  20 rr rr       jsr CountdownDisplay          ; Show the countdown when the round begins
+000008r 1  20 rr rr       jsr SweepInit                 ; Start the sweep; When we fall out a hit has occurred...
+00000Br 1               
+00000Br 1  AD rr rr       lda Score
+00000Er 1  29 F0          and #MASK_LEFT                ; Mask out the upper nibble
+000010r 1  4A             lsr
+000011r 1  4A             lsr
+000012r 1  4A             lsr
+000013r 1  4A             lsr                           ; and shift it right four bits
+000014r 1  C9 0F          cmp #SCORE_WIN                ; Did left player win?
+000016r 1  F0 0F          beq @DoRoundWinner            ; if so show win
+000018r 1               
+000018r 1  AD rr rr       lda Score
+00001Br 1  29 0F          and #MASK_RIGHT               ; Mask out the lower nibble
+00001Dr 1  C9 0F          cmp #SCORE_WIN                ; Did right player win?
+00001Fr 1  F0 06          beq @DoRoundWinner            ; if so show win
+000021r 1               
+000021r 1  20 rr rr       jsr ScoreDisplay              ; ...otherwise show the score
+000024r 1  4C rr rr       jmp DoRound                   ; and play the next round
+000027r 1               @DoRoundWinner:
+000027r 1  20 rr rr       jsr WinDisplay                ; Display the winner
+00002Ar 1  4C rr rr       jmp Start                     ; Restart
+00002Dr 1               
+00002Dr 1               ; =============================================================================
+00002Dr 1               ;   Check Input — Latch and clear the mailbox, once per frame
+00002Dr 1               ; =============================================================================
+00002Dr 1               ;   Must run every frame regardless of outcome — see the INPUT note up top.
+00002Dr 1               ;   LastKey is left at $FF ("no key") on a miss; no keycode off the MM74C922
+00002Dr 1               ;   can ever collide with that, so CheckHit can trust it below.
+00002Dr 1               
+00002Dr 1               CheckInput:
+00002Dr 1  A5 45          lda KEY_READY
+00002Fr 1  F0 09          beq @CheckInputIsZero         ; No key; fall out of check
+000031r 1  A5 44          lda KEY_CODE                  ; otherwise get the key code
+000033r 1  8D rr rr       sta LastKey                   ; and store it
+000036r 1  64 45          stz KEY_READY                 ; Clear key ready
+000038r 1  80 05          bra @CheckInputDone           ; and exit
+00003Ar 1               @CheckInputIsZero:
+00003Ar 1  A9 FF          lda #$FF                      ; $FF sentinel — no real keycode reaches this
+00003Cr 1  8D rr rr       sta LastKey                   ; far, so it can't be mistaken for a press
+00003Fr 1               @CheckInputDone:
+00003Fr 1  60             rts
+000040r 1               
+000040r 1               ; =============================================================================
+000040r 1               ;   Check Hit — Score a hit if SweepVal's zone matches LastKey
+000040r 1               ; =============================================================================
+000040r 1               ;   Must run before SweepVal is stepped below — this is checking whether the
+000040r 1               ;   value that was just shown and delayed on (still in SweepVal) was killed,
+000040r 1               ;   not the value the bit is about to move to next.
+000040r 1               
+000040r 1               CheckHit:
+000040r 1  A9 00          lda #0
+000042r 1  8D rr rr       sta Hit                       ; Clear Hit — stale non-zero here would end
+000045r 1                                               ; every future sweep on frame one
+000045r 1  AD rr rr       lda SweepVal
+000048r 1  C9 80          cmp #ZONE_LEFT                ; Are we in the left kill zone?
+00004Ar 1  F0 06          beq @CheckHitLeft             ; Continue to the left hit check
+00004Cr 1  C9 01          cmp #ZONE_RIGHT               ; Are we in the right kill zone?
+00004Er 1  F0 0B          beq @CheckHitRight            ; Continue to the right hit check
+000050r 1  80 30          bra @CheckHitDone             ; otherwise fall out of check
+000052r 1               
+000052r 1               @CheckHitLeft:
+000052r 1  AD rr rr       lda LastKey                   ; Load the last key press
+000055r 1  C9 00          cmp #KEY_LEFT                 ; Is it the left key?
+000057r 1  F0 0B          beq @CheckHitDoHitLeft        ; if so record the hit
+000059r 1  80 27          bra @CheckHitDone             ; if not, exit
+00005Br 1               
+00005Br 1               @CheckHitRight:
+00005Br 1  AD rr rr       lda LastKey                   ; Load the last key press
+00005Er 1  C9 0B          cmp #KEY_RIGHT                ; Is it the right key?
+000060r 1  F0 12          beq @CheckHitDoHitRight       ; if so record the hit
+000062r 1  80 1E          bra @CheckHitDone             ; if not, exit
+000064r 1               
+000064r 1               @CheckHitDoHitLeft:
+000064r 1  A9 01          lda #1
+000066r 1  8D rr rr       sta Hit                       ; Store the hit
+000069r 1  AD rr rr       lda Score
+00006Cr 1  18             clc
+00006Dr 1  69 10          adc #INC_LEFT                 ; Increment the player left score
+00006Fr 1  8D rr rr       sta Score
+000072r 1  80 0E          bra @CheckHitDone             ; Exit
+000074r 1               
+000074r 1               @CheckHitDoHitRight:
+000074r 1  A9 01          lda #1
+000076r 1  8D rr rr       sta Hit                       ; Store the hit
+000079r 1  AD rr rr       lda Score
+00007Cr 1  18             clc
+00007Dr 1  69 01          adc #INC_RIGHT                ; Increment the player right score
+00007Fr 1  8D rr rr       sta Score                     ; Falls through to @CheckHitDone
+000082r 1               
+000082r 1               @CheckHitDone:
+000082r 1  60             rts
+000083r 1               
+000083r 1               ; =============================================================================
+000083r 1               ;   Sweep Init — The sweep init routine
+000083r 1               ; =============================================================================
+000083r 1               
+000083r 1               SweepInit:
+000083r 1  AD rr rr       lda Counter                   ; Load the last counter value
+000086r 1  29 08          and #DIR_MASK                 ; and get the direction
+000088r 1  8D rr rr       sta SweepDir
+00008Br 1               
+00008Br 1  AD rr rr       lda Counter                   ; Load the last counter value again
+00008Er 1  29 07          and #POS_MASK                 ; and get the possible starting position (0-7)
+000090r 1               
+000090r 1  C9 01          cmp #POS_MIN
+000092r 1  B0 02          bcs @SweepPosNotBelow         ; If A >= POS_MIN, skip to next check
+000094r 1  A9 01          lda #POS_MIN                  ; otherwise clamp to POS_MIN
+000096r 1               @SweepPosNotBelow:
+000096r 1  C9 06          cmp #POS_MAX
+000098r 1  90 02          bcc @SweepPosClamped          ; If A < POS_MAX, we are good
+00009Ar 1  A9 06          lda #POS_MAX                  ; otherwise clamp to POS_MAX
+00009Cr 1               @SweepPosClamped:
+00009Cr 1  AA             tax                           ; X = clamped position, 1-6
+00009Dr 1               
+00009Dr 1  A9 01          lda #1                        ; build the one-hot pattern, starting at bit 0
+00009Fr 1               @SweepPosShift:
+00009Fr 1  E0 00          cpx #0
+0000A1r 1  F0 04          beq @SweepPosShiftDone
+0000A3r 1  0A             asl                           ; walk the lit bit up to the starting position
+0000A4r 1  CA             dex
+0000A5r 1  80 F8          bra @SweepPosShift
+0000A7r 1               @SweepPosShiftDone:
+0000A7r 1  8D rr rr       sta SweepVal                  ; store the one-hot starting position
+0000AAr 1               
+0000AAr 1               ; =============================================================================
+0000AAr 1               ;   Sweep Display — The sweep display loop
+0000AAr 1               ; =============================================================================
+0000AAr 1               
+0000AAr 1               SweepDisplay:
+0000AAr 1  EE rr rr       inc Counter                   ; Free-running; also reseeds next round's SweepInit
+0000ADr 1               
+0000ADr 1  AD rr rr       lda SweepVal                  ; Show the bit at its current position
+0000B0r 1  8D 00 94       sta LEDS
+0000B3r 1  20 rr rr       jsr SweepDelay
+0000B6r 1  20 rr rr       jsr CheckInput                ; Latch this frame's key press, or $FF
+0000B9r 1  20 rr rr       jsr CheckHit                  ; Score against the position just shown above —
+0000BCr 1                                               ; both must run before SweepVal moves below
+0000BCr 1  AD rr rr       lda Hit
+0000BFr 1  D0 2D          bne @SweepDisplayDone         ; A hit ends the sweep
+0000C1r 1               
+0000C1r 1  AD rr rr       lda SweepDir
+0000C4r 1  C9 00          cmp #DIR_LEFT
+0000C6r 1  F0 02          beq @SweepLeft                ; DIR_LEFT  -> walking toward LED 7, step with ASL
+0000C8r 1  80 0D          bra @SweepRight               ; DIR_RIGHT -> walking toward LED 0, step with LSR
+0000CAr 1               
+0000CAr 1               @SweepLeft:
+0000CAr 1  AD rr rr       lda SweepVal                  ; Reload — SweepDir was in A for the check above
+0000CDr 1  0A             asl                           ; One step toward LED 7
+0000CEr 1  8D rr rr       sta SweepVal
+0000D1r 1  C9 80          cmp #ZONE_LEFT                ; Landed in the left kill zone?
+0000D3r 1  F0 0F          beq @SweepReverse
+0000D5r 1  80 D3          bra SweepDisplay
+0000D7r 1               
+0000D7r 1               @SweepRight:
+0000D7r 1  AD rr rr       lda SweepVal                  ; Reload — SweepDir was in A for the check above
+0000DAr 1  4A             lsr                           ; One step toward LED 0
+0000DBr 1  8D rr rr       sta SweepVal
+0000DEr 1  C9 01          cmp #ZONE_RIGHT               ; Landed in the right kill zone?
+0000E0r 1  F0 02          beq @SweepReverse
+0000E2r 1  80 C6          bra SweepDisplay
+0000E4r 1               
+0000E4r 1               @SweepReverse:
+0000E4r 1  AD rr rr       lda SweepDir
+0000E7r 1  49 08          eor #DIR_MASK                 ; Flip toward the opposite wall
+0000E9r 1  8D rr rr       sta SweepDir
+0000ECr 1  80 BC          bra SweepDisplay              ; The bit still shows in the zone on the next pass
+0000EEr 1               
+0000EEr 1               @SweepDisplayDone:              ; Reached only when CheckHit sets Hit, above
+0000EEr 1  60             rts                           ; Unwinds through SweepInit's fallthrough, back to DoRound
+0000EFr 1               
+0000EFr 1               ; =============================================================================
+0000EFr 1               ;   Sweep Delay - The sweep delay subroutine
+0000EFr 1               ; =============================================================================
+0000EFr 1               
+0000EFr 1               SweepDelay:
+0000EFr 1  5A             phy                           ; SysDelay clobbers Y so lets save it...
+0000F0r 1  A9 08          lda #SWEEP_DELAY
+0000F2r 1  A2 00          ldx #0
+0000F4r 1  20 75 A0       jsr SysDelay                  ; Delay for SWEEP_DELAY centiseconds
+0000F7r 1  7A             ply                           ; and restore it
+0000F8r 1  60             rts
+0000F9r 1               
+0000F9r 1               ; =============================================================================
+0000F9r 1               ;   Countdown Display — The countdown display loop
+0000F9r 1               ; =============================================================================
+0000F9r 1               
+0000F9r 1               CountdownDisplay:
+0000F9r 1  A9 00          lda #0
+0000FBr 1  8D 00 94       sta LEDS                      ; Clear the LEDs
+0000FEr 1  A0 00          ldy #0
+000100r 1               @CountdownDisplayLoop:
+000100r 1  20 rr rr       jsr CountdownDelay
+000103r 1  B9 rr rr       lda Countdown,y               ; Load the next byte from the countdown data
+000106r 1  8D 00 94       sta LEDS
+000109r 1  C8             iny
+00010Ar 1  98             tya
+00010Br 1  C9 04          cmp #COUNTDOWN_LEN
+00010Dr 1  D0 F1          bne @CountdownDisplayLoop
+00010Fr 1               @CountdownDisplayExit:
+00010Fr 1  20 rr rr       jsr CountdownDelay
+000112r 1  A9 FF          lda #$FF                      ; Light all the LEDs
+000114r 1  8D 00 94       sta LEDS
+000117r 1  60             rts
+000118r 1               
+000118r 1               ; =============================================================================
+000118r 1               ;   Countdown Delay - The countdown delay subroutine
+000118r 1               ; =============================================================================
+000118r 1               
+000118r 1               CountdownDelay:
+000118r 1  5A             phy                           ; SysDelay clobbers Y so lets save it...
+000119r 1  A9 28          lda #COUNT_TIME
+00011Br 1  A2 00          ldx #0
+00011Dr 1  20 75 A0       jsr SysDelay                  ; Delay for COUNT_TIME centiseconds
+000120r 1  7A             ply                           ; and restore it
+000121r 1  60             rts
+000122r 1               
+000122r 1               ; =============================================================================
+000122r 1               ;   Score Display — The score display routine
+000122r 1               ; =============================================================================
+000122r 1               
+000122r 1               ScoreDisplay:
+000122r 1  AD rr rr       lda Score
+000125r 1  8D 00 94       sta LEDS
+000128r 1  20 rr rr       jsr ScoreDelay
+00012Br 1  60             rts
+00012Cr 1               
+00012Cr 1               ; =============================================================================
+00012Cr 1               ;   Score Delay - The score delay subroutine
+00012Cr 1               ; =============================================================================
+00012Cr 1               
+00012Cr 1               ScoreDelay:
+00012Cr 1  5A             phy                           ; SysDelay clobbers Y so lets save it...
+00012Dr 1  A9 4B          lda #SCORE_TIME
+00012Fr 1  A2 00          ldx #0
+000131r 1  20 75 A0       jsr SysDelay                  ; Delay for SCORE_TIME centiseconds
+000134r 1  7A             ply                           ; and restore it
+000135r 1  60             rts
+000136r 1               
+000136r 1               ; =============================================================================
+000136r 1               ;   Win Display — The win display routine
+000136r 1               ; =============================================================================
+000136r 1               
+000136r 1               WinDisplay:
+000136r 1  A0 06          ldy #WIN_FLASHES
+000138r 1               @WinDisplayLoop:
+000138r 1  AD rr rr       lda Score
+00013Br 1  8D 00 94       sta LEDS
+00013Er 1  20 rr rr       jsr WinDelay
+000141r 1  A9 00          lda #0
+000143r 1  8D 00 94       sta LEDS
+000146r 1  20 rr rr       jsr WinDelay
+000149r 1  88             dey
+00014Ar 1  98             tya
+00014Br 1  D0 EB          bne @WinDisplayLoop
+00014Dr 1               @WinDisplayExit:
+00014Dr 1  60             rts
+00014Er 1               
+00014Er 1               ; =============================================================================
+00014Er 1               ;   Win Delay - The win delay subroutine
+00014Er 1               ; =============================================================================
+00014Er 1               
+00014Er 1               WinDelay:
+00014Er 1  5A             phy                           ; SysDelay clobbers Y so lets save it...
+00014Fr 1  A9 14          lda #WIN_TIME
+000151r 1  A2 00          ldx #0
+000153r 1  20 75 A0       jsr SysDelay                  ; Delay for WIN_TIME centiseconds
+000156r 1  7A             ply                           ; and restore it
+000157r 1  60             rts
+000158r 1               
+000158r 1               ; =============================================================================
+000158r 1               ;   Data
+000158r 1               ; =============================================================================
+000158r 1               
+000158r 1  00           Score:    .byte 0               ; The players score; Upper nibble player left - Lower nibble player right
+000159r 1  00           Counter:  .byte 0               ; The sweep counter
+00015Ar 1  00           SweepVal: .byte 0               ; Current sweep value
+00015Br 1  00           SweepDir: .byte 0               ; Current sweep direction
+00015Cr 1  FF           LastKey:  .byte $FF             ; Latched by CheckInput each frame; $FF means no key
+00015Dr 1  00           Hit:      .byte 0               ; Set by CheckHit; cleared at the top of every call
+00015Er 1               
+00015Er 1               ; The countdown: two lit LEDs walking in from the ends until they meet.
+00015Er 1               ; Four steps of COUNT_TIME, then the sweep starts.
+00015Er 1               ;
+00015Er 1               ;   $81  %10000001
+00015Er 1               ;   $42  %01000010
+00015Er 1               ;   $24  %00100100
+00015Er 1               ;   $18  %00011000
+00015Er 1               
+00015Er 1               Countdown:
+00015Er 1  81 42 24 18    .byte $81, $42, $24, $18
+000162r 1               COUNTDOWN_LEN = * - Countdown
+000162r 1               
