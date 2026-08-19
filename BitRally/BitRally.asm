@@ -1,6 +1,6 @@
 .setcpu "65C02"
 
-.include "../6502.inc"
+.include "../6502-KIM.inc"
 
 .segment "CODE"
 
@@ -98,9 +98,9 @@
 ; =============================================================================
 ;   Hardware
 ; =============================================================================
-
-LEDS := $9400                   ; Accessory bus — eight LEDs behind a 74HC373
-                                ; latch.  Write-only: a read is open bus.
+;   LEDS, the keypad mailbox and the Kernal entries all come from
+;   6502-KIM.inc.  The latch is write-only — a read is open bus — so the
+;   sweep keeps its own copy of the pattern rather than reading it back.
 
 ; =============================================================================
 ;   Zero page
@@ -142,15 +142,11 @@ LEDS := $9400                   ; Accessory bus — eight LEDs behind a 74HC373
 ;   every firmware build.
 ; =============================================================================
 
-KEY_CODE  := $44                ; Last keycode latched by KeyIrq
-KEY_READY := $45                ; Nonzero when a press is waiting
-
-; The code is not the value.  These come off the MM74C922 encoder in the order
-; the switches sit on the board — see the keypad map in 6502-DOCS.  ESC ($10)
-; never reaches the mailbox: KeyIrq takes it and jumps to WarmStart.
-
-KEY_LEFT  = $00                 ; ◄
-KEY_RIGHT = $0B                 ; ►
+;   KEY_CODE, KEY_READY, KEY_LEFT and KEY_RIGHT all come from 6502-KIM.inc.
+;   The code is not the value — they come off the MM74C922 encoder in the
+;   order the switches sit on the board, not the order they are printed.
+;   ESC ($10) never reaches the mailbox: KeyIrq takes it and jumps to
+;   WarmStart.
 
 ; =============================================================================
 ;   Scoring

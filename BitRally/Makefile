@@ -1,5 +1,5 @@
 TARGET = BitRally
-CONFIG = 6502
+CONFIG = 6502-KIM
 LOAD = 0x0800
 
 .PHONY: all build view run woz clean

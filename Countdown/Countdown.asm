@@ -1,6 +1,6 @@
 .setcpu "65C02"
 
-.include "../6502.inc"
+.include "../6502-KIM.inc"
 
 .segment "CODE"
 
@@ -33,9 +33,9 @@
 ; =============================================================================
 ;   Hardware
 ; =============================================================================
-
-LEDS := $9400                   ; Accessory bus — eight LEDs behind a 74HC373
-                                ; latch.  Write-only: a read is open bus.
+;   LEDS and the Kernal entries come from 6502-KIM.inc.  The latch is
+;   write-only — a read is open bus — so the countdown keeps its own copy
+;   of the pattern rather than reading it back.
 
 ; =============================================================================
 ;   Timing — all in centiseconds (10 ms units), the SysDelay unit

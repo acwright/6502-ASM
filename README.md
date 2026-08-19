@@ -67,8 +67,13 @@ Installed via the [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) app
 - `make` or `make all` - Build the program
 - `make view` - Display hexdump of the built program
 - `make woz` - Create a Wozmon compatible file using [bin2woz](https://github.com/acwright/bin2woz)
+- `make cf` - Create a CompactFlash disk image containing the program
 - `make run` - Launch the emulator app with the built program loaded
+- `make eeprom` - Burn a cartridge image to an AT28C256 (cartridge targets)
 - `make clean` - Remove build artifacts
+
+Not every program offers every target: `woz` and `cf` belong to programs
+loaded into RAM, and `eeprom` to cartridges.
 
 ### Example
 
@@ -80,10 +85,49 @@ make woz    # Create a Wozmon compatible file
 make run    # Launch the emulator
 ```
 
-Each program includes `6502.inc`, the shared include file describing the Kernal
-jump table, hardware registers, and system constants. It tracks the published
-API of the [BIOS](https://github.com/acwright/6502-BIOS) and is kept identical
-across the repositories that ship a copy.
+## Targets, includes and configs
+
+This repository holds three kinds of program, and each picks up a different
+pair of files. The Kernal is the same on every machine here — what differs is
+which hardware exists and where the code lives.
+
+| Program | Machine | Include | Config | Output |
+|---|---|---|---|---|
+| `HelloWorld` | AC6502 (ACE) | `6502.inc` | `6502.cfg` | `.prg` loaded at `$0800` |
+| `HelloWorldCart` | AC6502 (ACE) | `6502.inc` | `6502-16K.cfg` | `.crt` ROM at `$C000` |
+| `BitRally`, `Countdown` | AC6502 KIM | `6502-KIM.inc` | `6502-KIM.cfg` | `.bin` loaded at `$0800` |
+
+### The includes
+
+`6502.inc` describes a fully fitted ACE: the Kernal jump table, BASIC, video,
+sound, storage, the RTC and the VIA. It tracks the published API of the
+[BIOS](https://github.com/acwright/6502-BIOS) and is kept identical across the
+repositories that ship a copy.
+
+`6502-KIM.inc` describes the KIM, which is not a stock ACE. The Keypad Card
+overlays `$C000-$FFFF` and is decoded before ROM, so the machine boots into a
+hex monitor rather than BASIC. It has no video, no sound, no storage, no RTC
+and no VIA, and a few addresses mean something else entirely — `$9400` is a
+write-only LED latch here, not the family's GPIO window. It also names the
+things only a KIM has: the LED latch, and the keypad mailbox that replaces
+`Chrin`, which never returns anything on this machine.
+
+Using `6502.inc` for a KIM program is the mistake worth avoiding. It compiles
+and it links, but it puts several hundred names in scope for hardware that is
+not fitted, and it does not name the hardware that is.
+
+### The configs
+
+`6502.cfg` and `6502-KIM.cfg` are the same layout today — program RAM at
+`$0800-$7FFF` — and are kept separate so the KIM's can change without
+disturbing the family's.
+
+`6502-16K.cfg` is the cartridge layout: 16K of code space at `$C000-$FFF9`,
+emitted as a 32K image spanning `$8000-$FFFF` so it can be burned straight to
+a 28C256. A cartridge starts at the RESET vector with nothing initialized and
+nothing to return to, so it calls `KernalInit` itself and never exits. See
+[6502-CRT](https://github.com/acwright/6502-CRT) for the fully commented
+template.
 
 ## Related
 
