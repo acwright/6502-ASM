@@ -3,7 +3,7 @@
 ; =============================================================================
 ;
 ;   CPU:       WDC 65C02S at 1 MHz
-;   ROM:       AC6502 BIOS v1.5, with the Keypad Card overlaying the top
+;   ROM:       AC6502 BIOS v1.6, with the Keypad Card overlaying the top
 ;   Assembler: ca65 (cc65 toolchain) — := for an address, = for a value
 ;
 ;   Every address on this machine that has a name, and nothing else.  If a
@@ -151,7 +151,7 @@ KEY_B               = $17
 
 ;   The interrupt vectors are in RAM, which is what makes them yours to
 ;   change.  $FFFE is the Keypad Card's and cannot be written; it holds
-;   $E49C, and $E49C is one instruction — JMP ($0300).  So a handler goes in
+;   $E4A2, and $E4A2 is one instruction — JMP ($0300).  So a handler goes in
 ;   IRQ_PTR, and three things follow from that jump being direct:
 ;
 ;     - NOTHING IS SAVED.  Your handler is entered with A, X and Y exactly as
