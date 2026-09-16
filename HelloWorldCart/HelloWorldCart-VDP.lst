@@ -8,18 +8,38 @@ Current file: HelloWorldCart.asm
 000000r 1               ; the default builds for the TMS9918A on BIOS 1.x.
 000000r 1               .ifdef VDP
 000000r 1               .include "../6502-VDP.inc"
-000000r 1               .else
-000000r 1               .include "../6502.inc"
 000000r 2               ; =============================================================================
-000000r 2               ;   6502.inc — External include file for the 6502 system
+000000r 2               ;   6502-VDP.inc — the AC6502 ACE with a 6502-PICOVDP
 000000r 2               ; =============================================================================
 000000r 2               ;
 000000r 2               ;   CPU:       WDC 65C02S
-000000r 2               ;   BIOS:      v1.6
+000000r 2               ;   Video:     6502-PICOVDP (SPEC draft 0.4)
+000000r 2               ;   BIOS:      2.0 (pending)
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 000000r 2               ;
-000000r 2               ;   Include this file in external projects to access Kernal routines,
-000000r 2               ;   IO hardware registers, system variables, and useful constants.
+000000r 2               ;   Include this file in programs for an ACE whose video card is a
+000000r 2               ;   6502-PICOVDP, running BIOS 2.x, to access Kernal routines, IO hardware
+000000r 2               ;   registers, system variables, and useful constants.  It names the
+000000r 2               ;   PICOVDP's second port pair, its registers, status registers and bit
+000000r 2               ;   fields as VC_* equates.
+000000r 2               ;
+000000r 2               ;   An ACE with a TMS9918A uses 6502.inc instead.  A program built with this
+000000r 2               ;   file assembles and links for either machine but only runs on this one.
+000000r 2               ;   To build one source both ways, select the include with ca65's VDP symbol
+000000r 2               ;   (make VDP=1 passes --asm-define VDP):
+000000r 2               ;
+000000r 2               ;     .ifdef VDP
+000000r 2               ;     .include "../6502-VDP.inc"
+000000r 2               ;     .else
+000000r 2               ;     .include "../6502.inc"
+000000r 2               ;     .endif
+000000r 2               ;
+000000r 2               ;   Do not include both: every shared name would be defined twice.
+000000r 2               ;
+000000r 2               ;   PENDING BIOS 2.0: until 2.0 is tagged, the notes below and Sections 1-4
+000000r 2               ;   still describe BIOS 1.6, and BIOS_VERSION_MAJOR/MINOR are 1.6's.  Every
+000000r 2               ;   jump-table address shown keeps its place on 2.x.  The video registers and
+000000r 2               ;   constants in Sections 5 and 6 follow the 6502-PICOVDP SPEC.
 000000r 2               ;
 000000r 2               ;   MEMORY MAP
 000000r 2               ;   ----------
@@ -44,7 +64,7 @@ Current file: HelloWorldCart.asm
 000000r 2               ;   $9000-$9003   IO 5: Serial (R65C51 ACIA)
 000000r 2               ;   $9400-$940F   IO 6: GPIO (65C22 VIA — keyboard & joysticks)
 000000r 2               ;   $9800-$981C   IO 7: Sound (SID / ARMSID)
-000000r 2               ;   $9C00-$9C01   IO 8: Video (TMS9918 / pico9918)
+000000r 2               ;   $9C00-$9C03   IO 8: Video (6502-PICOVDP, two port pairs)
 000000r 2               ;   $A000-$A0FF   Kernal Jump Table (stable entry points)
 000000r 2               ;   $A100-$B7FF   Kernal Implementation
 000000r 2               ;   $B800-$BFFF   Character Set ROM (2 KB, 256 × 8-byte patterns)
@@ -88,7 +108,7 @@ Current file: HelloWorldCart.asm
 000000r 2               ;   IO_MODE
 000000r 2               ;   -------
 000000r 2               ;   Bit 0 of IO_MODE selects the console output device:
-000000r 2               ;     0 = Video (TMS9918)    1 = Serial (R65C51)
+000000r 2               ;     0 = Video (6502-PICOVDP)    1 = Serial (R65C51)
 000000r 2               ;   Chrout ($A000) dispatches automatically based on IO_MODE.
 000000r 2               ;   Use SetIOMode / GetIOMode to change or query the active console.
 000000r 2               ;
@@ -153,7 +173,7 @@ Current file: HelloWorldCart.asm
 000000r 2               HW_SC               = %00010000          ; Bit 4: Serial card    (IO 5, R65C51)
 000000r 2               HW_GPIO             = %00100000          ; Bit 5: GPIO card      (IO 6, 65C22 VIA — keyboard/joysticks)
 000000r 2               HW_SID              = %01000000          ; Bit 6: Sound card     (IO 7, SID/ARMSID)
-000000r 2               HW_VID              = %10000000          ; Bit 7: Video card     (IO 8, TMS9918/pico9918)
+000000r 2               HW_VID              = %10000000          ; Bit 7: Video card     (IO 8, 6502-PICOVDP)
 000000r 2               
 000000r 2               ; BRK register save area (populated by the BRK handler before entering Monitor):
 000000r 2               BRK_P               := $0310             ; Saved processor status (P)
@@ -894,15 +914,76 @@ Current file: HelloWorldCart.asm
 000000r 2               SID_NOTE_Bb7        = SID_NOTE_AS7
 000000r 2               ; Note: B7 (~3951 Hz = $102F0) exceeds the 16-bit SID register — not defined
 000000r 2               
-000000r 2               ; --- Video Card (TMS9918 / pico9918) (IO 8: $9C00-$9C01) ---
-000000r 2               ;   Text mode: 40 columns × 24 rows.  Name table at VRAM $0000 (960 bytes).
-000000r 2               ;   Pattern table at VRAM $0800 (2 KB, 256 × 8-byte character patterns).
-000000r 2               ;   To write to a VRAM address: write low byte to VC_REG, then (high | $40) to VC_REG.
-000000r 2               ;   To read from a VRAM address: write low byte to VC_REG, then high byte to VC_REG.
-000000r 2               ;   Register writes: write data byte to VC_REG, then (reg# | $80) to VC_REG.
-000000r 2               VC_DATA             := $9C00             ; R/W — VRAM data (auto-increments address)
-000000r 2               VC_REG              := $9C01             ; Write — Address/register port
-000000r 2               VC_STATUS           := $9C01             ; Read — Status register
+000000r 2               ; --- Video Card (6502-PICOVDP) (IO 8: $9C00-$9C03) ---
+000000r 2               ;   Two complete, independent port pairs.  Each has its own VRAM pointer,
+000000r 2               ;   read-ahead byte, command flip-flop and status selector; both reach the
+000000r 2               ;   same 64 KB of VRAM and the same registers (VBANK and VINC included).
+000000r 2               ;   Use port A in foreground code and port B in interrupt handlers, and a
+000000r 2               ;   handler never breaks a command pair half written — no sei/cli needed
+000000r 2               ;   around VDP work.  A handler that writes VBANK or VINC puts them back.
+000000r 2               ;
+000000r 2               ;   The command protocol is the TMS9918's, on either port: two writes to the
+000000r 2               ;   command port, a payload byte P and then a command byte C.
+000000r 2               ;     Register write:    P = value,       C = VC_REG_WRITE  | register (0-127)
+000000r 2               ;     VRAM write addr:   P = address low, C = VC_ADDR_WRITE | address bits 13:8
+000000r 2               ;     VRAM read addr:    P = address low, C = address bits 13:8 (prefetches)
+000000r 2               ;   Address bits 15:14 come from VBANK.  After each VC_DATA access the pointer
+000000r 2               ;   moves by VINC (reset +1), carrying into the bank bits.
+000000r 2               ;   Reading a status port returns the status register its STATSEL names, and
+000000r 2               ;   resets that pair's flip-flop — read status once to resynchronize.
+000000r 2               VC_DATA             := $9C00             ; R/W — Port A VRAM data (pointer advances by VINC)
+000000r 2               VC_REG              := $9C01             ; Write — Port A command (register / address)
+000000r 2               VC_STATUS           := $9C01             ; Read — Port A status (register named by STATSEL_A)
+000000r 2               VC_DATA2            := $9C02             ; R/W — Port B VRAM data (for interrupt handlers)
+000000r 2               VC_REG2             := $9C03             ; Write — Port B command
+000000r 2               VC_STATUS2          := $9C03             ; Read — Port B status (register named by STATSEL_B)
+000000r 2               
+000000r 2               ; Command byte bits (second write to VC_REG / VC_REG2):
+000000r 2               VC_REG_WRITE        = $80                ; %1rrrrrrr — write register r with the payload
+000000r 2               VC_ADDR_WRITE       = $40                ; %01aaaaaa — set the VRAM pointer for writing
+000000r 2                                                        ; %00aaaaaa — set it for reading (no bit to OR in)
+000000r 2               
+000000r 2               ; Register numbers (write-only; read state back through the status registers).
+000000r 2               ;   Registers $02-$06 are aliases of L0NAME, L0ATTR, L0PAT, SPRATTR and SPRPAT,
+000000r 2               ;   so a TMS9918 program's writes to registers 2-6 reach them.  The names
+000000r 2               ;   below are the block addresses; the aliases get no names of their own.
+000000r 2               ; $00-$07 — Legacy core
+000000r 2               VC_REG_MODE0        = $00                ; b1 M3 (see VC_MODE0_*)
+000000r 2               VC_REG_MODE1        = $01                ; DISP, IE, M1, M2, SPRSIZE, SPRMAG (see VC_MODE1_*)
+000000r 2               VC_REG_COLOR        = $07                ; b7:4 default foreground, b3:0 backdrop/border
+000000r 2               ; $08-$0F — Access and interrupts
+000000r 2               VC_REG_VBANK        = $08                ; VRAM address bits 15:14 (b1:0), sampled by an address command
+000000r 2               VC_REG_VINC         = $09                ; Pointer stride, signed -128..+127 ($00 = none; reset $01)
+000000r 2               VC_REG_IRQEN        = $0A                ; Interrupt enables (see VC_IRQ_*)
+000000r 2               VC_REG_IRQLINE      = $0B                ; Scanline compare, display line 0-255
+000000r 2               VC_REG_PALBASE      = $0C                ; Palette base, b5:0 × $400 (reset $3F = VC_PALETTE)
+000000r 2               VC_REG_VMODE        = $0D                ; Display mode (see VC_VMODE_*)
+000000r 2               VC_REG_STATSEL_B    = $0E                ; Status register port B reads (0-15)
+000000r 2               VC_REG_STATSEL_A    = $0F                ; Status register port A reads (0-15)
+000000r 2               ; $10-$17 — Layer 0
+000000r 2               VC_REG_L0NAME       = $10                ; Name table base, × $400 (alias $02)
+000000r 2               VC_REG_L0ATTR       = $11                ; Attribute table base, × $400 (alias $03)
+000000r 2               VC_REG_L0PAT        = $12                ; Pattern table base, × $800 (alias $04)
+000000r 2               VC_REG_L0SCRX       = $13                ; Horizontal scroll, bits 7:0 (bit 8 is VC_LCTRL_SCRX8)
+000000r 2               VC_REG_L0SCRY       = $14                ; Vertical scroll, pixels
+000000r 2               VC_REG_L0CTRL       = $15                ; Depth, attribute source, enable, opacity (see VC_LCTRL_*; reset $3C)
+000000r 2               VC_REG_L0PAL        = $16                ; b3:0 palette group high bits
+000000r 2               ; $18-$1F — Layer 1 (reset: disabled, index 0 transparent)
+000000r 2               VC_REG_L1NAME       = $18                ; Name table base, × $400
+000000r 2               VC_REG_L1ATTR       = $19                ; Attribute table base, × $400
+000000r 2               VC_REG_L1PAT        = $1A                ; Pattern table base, × $800
+000000r 2               VC_REG_L1SCRX       = $1B                ; Horizontal scroll, bits 7:0 (bit 8 is VC_LCTRL_SCRX8)
+000000r 2               VC_REG_L1SCRY       = $1C                ; Vertical scroll, pixels
+000000r 2               VC_REG_L1CTRL       = $1D                ; As L0CTRL (reset $0C)
+000000r 2               VC_REG_L1PAL        = $1E                ; b3:0 palette group high bits
+000000r 2               ; $20-$27 — Sprites
+000000r 2               VC_REG_SPRATTR      = $20                ; Sprite attribute table base, × $80 (alias $05)
+000000r 2               VC_REG_SPRPAT       = $21                ; Sprite pattern table base, × $800 (alias $06)
+000000r 2               VC_REG_SPRCOUNT     = $22                ; Active sprite slots, 0-64 (reset 32)
+000000r 2               VC_REG_SPRCTRL      = $23                ; Enable, collision, $D0 terminator, depth (see VC_SPRCTRL_*; reset $27)
+000000r 2               VC_REG_SPRLIMIT     = $24                ; Sprites drawn per scanline, 1-32 (reset 16)
+000000r 2               VC_REG_SPRPAL       = $25                ; b3:0 palette group high bits for sprites
+000000r 2               ; $17, $1F, $26-$27 and $28-$7F are reserved: write 0.
 000000r 2               
 000000r 2               ; =============================================================================
 000000r 2               ;   SECTION 6: USEFUL CONSTANTS
@@ -929,13 +1010,110 @@ Current file: HelloWorldCart.asm
 000000r 2               CHAR_ESC            = $1B                ; Escape
 000000r 2               CHAR_SPACE          = $20                ; Space
 000000r 2               
-000000r 2               ; --- Video Dimensions ---
+000000r 2               ; --- Video Dimensions (Text mode) ---
+000000r 2               ;   The text console's layout, which the PICOVDP's Text mode keeps.
 000000r 2               VID_COLS            = 40                 ; Screen width in columns
 000000r 2               VID_ROWS            = 24                 ; Screen height in rows
-000000r 2               VID_NAME_TABLE      = $0000              ; VRAM address of name table (40×24 = 960 bytes)
-000000r 2               VID_PATTERN_TABLE   = $0800              ; VRAM address of pattern/character table (2048 bytes)
+000000r 2               VID_NAME_TABLE      = $0000              ; VRAM address of name table (40×24 = 960 bytes; L0NAME = $00)
+000000r 2               VID_PATTERN_TABLE   = $0800              ; VRAM address of pattern/character table (2048 bytes; L0PAT = $01)
 000000r 2               
-000000r 2               ; --- TMS9918 Color Constants (for VideoSetColor) ---
+000000r 2               ; --- 6502-PICOVDP: MODE0 / MODE1 bits ---
+000000r 2               ;   M1, M2 and M3 select the display mode only while VMODE is VC_VMODE_LEGACY.
+000000r 2               VC_MODE0_M3         = %00000010          ; M3 legacy mode select
+000000r 2               VC_MODE1_DISP       = %01000000          ; Display enable (clear: backdrop only)
+000000r 2               VC_MODE1_IE         = %00100000          ; Vertical blank IRQ enable (alias of VC_IRQ_VBLANK in IRQEN)
+000000r 2               VC_MODE1_M1         = %00010000          ; M1 legacy mode select (Text)
+000000r 2               VC_MODE1_M2         = %00001000          ; M2 legacy mode select
+000000r 2               VC_MODE1_SPRSIZE    = %00000010          ; Sprite size: 0 = 8×8, 1 = 16×16
+000000r 2               VC_MODE1_SPRMAG     = %00000001          ; Magnify sprites ×2
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: VMODE values ---
+000000r 2               VC_VMODE_LEGACY     = $0                 ; M1/M2/M3 select the mode (reset); $5-$F behave as $0
+000000r 2               VC_VMODE_TEXT       = $1                 ; 40×24 cells of 6×8, 240×192
+000000r 2               VC_VMODE_COMPACT    = $2                 ; 32×24 cells of 8×8, 256×192
+000000r 2               VC_VMODE_GRAPHICS   = $3                 ; 32×30 cells of 8×8, 256×240
+000000r 2               VC_VMODE_FULL       = $4                 ; 40×30 cells of 8×8, 320×240, no border
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: L0CTRL / L1CTRL bits ---
+000000r 2               ;   Pick one depth and one attribute source, then OR in the flags.
+000000r 2               VC_LCTRL_1BPP       = $00                ; b1:0 bit depth — 8 bytes per tile
+000000r 2               VC_LCTRL_2BPP       = $01                ;   16 bytes per tile
+000000r 2               VC_LCTRL_4BPP       = $02                ;   32 bytes per tile
+000000r 2               VC_LCTRL_8BPP       = $03                ;   64 bytes per tile
+000000r 2               VC_LCTRL_ATTR_CELL  = $00                ; b3:2 attribute source — one byte per cell at LxATTR + cell
+000000r 2               VC_LCTRL_ATTR_GROUP = $04                ;   one byte per 8 patterns at LxATTR + (pattern >> 3)
+000000r 2               VC_LCTRL_ATTR_ROW   = $08                ;   one byte per pattern row at LxATTR + pattern × 8 + row
+000000r 2               VC_LCTRL_ATTR_NONE  = $0C                ;   no attribute fetch
+000000r 2               VC_LCTRL_ENABLE     = $10                ; b4 layer enable
+000000r 2               VC_LCTRL_OPAQUE     = $20                ; b5 index 0 opaque
+000000r 2               VC_LCTRL_SCRX8      = $40                ; b6 horizontal scroll bit 8 (Full mode's 320 pixels)
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: attribute byte (layers at 2/4/8bpp, and sprites) ---
+000000r 2               ;   At 1bpp a layer's colour byte is foreground (b7:4) and background (b3:0).
+000000r 2               VC_ATTR_SUBPAL      = $0F                ; b3:0 sub-palette (ignored by an 8bpp layer)
+000000r 2               VC_ATTR_FLIPH       = $10                ; b4 flip horizontally
+000000r 2               VC_ATTR_FLIPV       = $20                ; b5 flip vertically
+000000r 2               VC_ATTR_PRIORITY    = $40                ; b6 priority (layer tile in front of sprites; sprite in front of layer 1)
+000000r 2               VC_ATTR_BIT8        = $80                ; b7 layer: pattern index bit 8 (2/4bpp); sprite: X bit 8
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: SPRCTRL bits ---
+000000r 2               VC_SPRCTRL_ENABLE   = $01                ; b0 sprites enable
+000000r 2               VC_SPRCTRL_COLLIDE  = $02                ; b1 collision detection enable
+000000r 2               VC_SPRCTRL_TERM     = $04                ; b2 a Y of VC_SPRITE_END ends the sprite list
+000000r 2               VC_SPRCTRL_DETAIL   = $08                ; b3 detailed collision map (STAT8-STAT15)
+000000r 2               VC_SPRCTRL_1BPP     = $00                ; b5:4 sprite bit depth
+000000r 2               VC_SPRCTRL_2BPP     = $10
+000000r 2               VC_SPRCTRL_4BPP     = $20
+000000r 2               VC_SPRCTRL_8BPP     = $30
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: interrupt sources (IRQEN bits, latched in STAT1) ---
+000000r 2               VC_IRQ_VBLANK       = $01                ; b0 end of the active picture, once a frame
+000000r 2               VC_IRQ_SCANLINE     = $02                ; b1 display line matches IRQLINE
+000000r 2               VC_IRQ_OVERFLOW     = $04                ; b2 a sprite was dropped, at most once a frame
+000000r 2               VC_IRQ_COLLISION    = $08                ; b3 two sprites collided, at most once a frame
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: status registers (values for STATSEL_A / STATSEL_B) ---
+000000r 2               ;   Reading STAT0 clears its flags, STAT7, the collision map and the vblank,
+000000r 2               ;   overflow and collision latches in STAT1.  Reading STAT1 clears only the
+000000r 2               ;   STAT1 latches — so a handler on port B reads STAT1 and foreground code
+000000r 2               ;   polling STAT0 on port A still sees F.  Read STAT7 and the collision map
+000000r 2               ;   before STAT0.
+000000r 2               VC_STAT0            = 0                  ; F, OVF, COL, first sprite dropped (TMS9918 status)
+000000r 2               VC_STAT1            = 1                  ; Latched interrupt sources still enabled in IRQEN
+000000r 2               VC_STAT2            = 2                  ; Current display line, low 8 bits
+000000r 2               VC_STAT3            = 3                  ; Blanking (see VC_STAT3_*)
+000000r 2               VC_STAT4            = 4                  ; Identification byte, VC_ID
+000000r 2               VC_STAT5            = 5                  ; Firmware version, BCD (high nibble major, low nibble minor)
+000000r 2               VC_STAT6            = 6                  ; Capabilities (see VC_CAP_*)
+000000r 2               VC_STAT7            = 7                  ; Index (0-63) of the first sprite dropped on the latest overflowing line
+000000r 2               VC_STAT_COLLIDE     = 8                  ; STAT8-STAT15: collision map, sprite s is bit s mod 8 of STAT(8 + s/8)
+000000r 2               
+000000r 2               VC_STAT0_F          = $80                ; A picture has ended (set whatever IRQEN holds)
+000000r 2               VC_STAT0_OVF        = $40                ; A sprite has been dropped
+000000r 2               VC_STAT0_COL        = $20                ; Two sprites have collided
+000000r 2               VC_STAT0_SPRITE     = $1F                ; Low five bits of the first sprite dropped
+000000r 2               
+000000r 2               VC_STAT3_VBLANK     = $01                ; Vertical blanking (borders included)
+000000r 2               VC_STAT3_HBLANK     = $02                ; Horizontal blanking (advisory)
+000000r 2               
+000000r 2               VC_ID               = $AC                ; STAT4 on a 6502-PICOVDP
+000000r 2               
+000000r 2               VC_CAP_LAYER2       = $01                ; STAT6 b0 two layers
+000000r 2               VC_CAP_8BPP         = $02                ; STAT6 b1 8bpp layer
+000000r 2               VC_CAP_FLIP         = $04                ; STAT6 b2 sprite flip
+000000r 2               VC_CAP_SCROLL       = $08                ; STAT6 b3 hardware scroll
+000000r 2               VC_CAP_SCANLINE     = $10                ; STAT6 b4 scanline IRQ
+000000r 2               VC_CAP_VRAM64K      = $20                ; STAT6 b5 64 KB VRAM
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: VRAM ---
+000000r 2               VC_PALETTE          = $FC00              ; Palette at reset PALBASE: 256 entries of %0000RRRR, %GGGGBBBB
+000000r 2               VC_SPRITE_END       = $D0                ; Sprite Y that ends the list while VC_SPRCTRL_TERM is set
+000000r 2               
+000000r 2               ; --- Colour Constants (palette row 0) ---
+000000r 2               ;   The PICOVDP's default palette puts the sixteen TMS9918 colours in row 0
+000000r 2               ;   at their TMS9918 indices, so these name the same colours they always did.
+000000r 2               ;   At 1bpp they are the foreground and background nibbles, and for
+000000r 2               ;   VideoSetColor.  Index 0 is transparent unless the layer is opaque.
 000000r 2               ;   Pass as: (foreground << 4) | background
 000000r 2               ;   Example: white on black = $F0, green on black = $20
 000000r 2               TMS_TRANSPARENT     = $0
@@ -955,12 +1133,8 @@ Current file: HelloWorldCart.asm
 000000r 2               TMS_GRAY            = $E
 000000r 2               TMS_WHITE           = $F
 000000r 2               
-000000r 2               ; --- Monitor Entry Points ---
-000000r 2               ;   The machine code monitor lives at $EE00 and is entered normally via BRK.
-000000r 2               ;   These are useful if you want to jump there directly.
-000000r 2               MONITOR_ENTRY       := $EE00             ; Cold entry (from boot menu or user code)
-000000r 2               MONITOR_BRK_ENTRY   := $EE03             ; BRK entry (displays saved registers)
-000000r 2               
+000000r 1               .else
+000000r 1               .include "../6502.inc"
 000000r 1               .endif
 000000r 1               
 000000r 1               .segment "CART"

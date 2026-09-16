@@ -1,6 +1,12 @@
 .setcpu "65C02"
 
+; make VDP=1 builds for an ACE with a 6502-PICOVDP on BIOS 2.x;
+; the default builds for the TMS9918A on BIOS 1.x.
+.ifdef VDP
+.include "../6502-VDP.inc"
+.else
 .include "../6502.inc"
+.endif
 
 .segment "CODE"
 

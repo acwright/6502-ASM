@@ -4,6 +4,11 @@ Current file: HelloWorld.asm
 
 000000r 1               .setcpu "65C02"
 000000r 1               
+000000r 1               ; make VDP=1 builds for an ACE with a 6502-PICOVDP on BIOS 2.x;
+000000r 1               ; the default builds for the TMS9918A on BIOS 1.x.
+000000r 1               .ifdef VDP
+000000r 1               .include "../6502-VDP.inc"
+000000r 1               .else
 000000r 1               .include "../6502.inc"
 000000r 2               ; =============================================================================
 000000r 2               ;   6502.inc — External include file for the 6502 system
@@ -956,6 +961,7 @@ Current file: HelloWorld.asm
 000000r 2               MONITOR_ENTRY       := $EE00             ; Cold entry (from boot menu or user code)
 000000r 2               MONITOR_BRK_ENTRY   := $EE03             ; BRK entry (displays saved registers)
 000000r 2               
+000000r 1               .endif
 000000r 1               
 000000r 1               .segment "CODE"
 000000r 1               
