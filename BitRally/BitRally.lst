@@ -10,7 +10,7 @@ Current file: BitRally.asm
 000000r 2               ; =============================================================================
 000000r 2               ;
 000000r 2               ;   CPU:       WDC 65C02S at 1 MHz
-000000r 2               ;   ROM:       AC6502 BIOS v1.5, with the Keypad Card overlaying the top
+000000r 2               ;   ROM:       AC6502 BIOS v1.6, with the Keypad Card overlaying the top
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — := for an address, = for a value
 000000r 2               ;
 000000r 2               ;   Every address on this machine that has a name, and nothing else.  If a
@@ -158,7 +158,7 @@ Current file: BitRally.asm
 000000r 2               
 000000r 2               ;   The interrupt vectors are in RAM, which is what makes them yours to
 000000r 2               ;   change.  $FFFE is the Keypad Card's and cannot be written; it holds
-000000r 2               ;   $E49C, and $E49C is one instruction — JMP ($0300).  So a handler goes in
+000000r 2               ;   $E4A2, and $E4A2 is one instruction — JMP ($0300).  So a handler goes in
 000000r 2               ;   IRQ_PTR, and three things follow from that jump being direct:
 000000r 2               ;
 000000r 2               ;     - NOTHING IS SAVED.  Your handler is entered with A, X and Y exactly as
