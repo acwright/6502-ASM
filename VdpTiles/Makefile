@@ -8,7 +8,8 @@ CONFIG = 6502
 VDP = 1
 OUT      = $(TARGET)
 ASFLAGS  = --asm-define VDP
-RUNFLAGS =                    # the PICOVDP card option arrives with 6502-EMULATOR 3.x
+# --vdp picovdp needs 6502-EMULATOR 3.x or later
+RUNFLAGS = --vdp picovdp
 RUNFLAGS += $(if $(ROM),--rom $(ROM))
 
 .PHONY: all build view run woz cf clean

@@ -9,7 +9,8 @@ VDP ?= 0
 ifeq ($(VDP),1)
   OUT      = $(TARGET)-VDP
   ASFLAGS  = --asm-define VDP
-  RUNFLAGS =                  # the PICOVDP card option arrives with 6502-EMULATOR 3.x
+  # --vdp picovdp needs 6502-EMULATOR 3.x or later
+  RUNFLAGS = --vdp picovdp
 else
   OUT      = $(TARGET)
   ASFLAGS  =
