@@ -13,7 +13,7 @@ Current file: VdpTiles.asm
 000000r 2               ; =============================================================================
 000000r 2               ;
 000000r 2               ;   CPU:       WDC 65C02S
-000000r 2               ;   Video:     6502-PICOVDP (SPEC draft 0.4)
+000000r 2               ;   Video:     6502-PICOVDP (SPEC draft 0.5)
 000000r 2               ;   BIOS:      2.0 (pending)
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 000000r 2               ;
@@ -983,7 +983,9 @@ Current file: VdpTiles.asm
 000000r 2               VC_REG_SPRCTRL      = $23                ; Enable, collision, $D0 terminator, depth (see VC_SPRCTRL_*; reset $27)
 000000r 2               VC_REG_SPRLIMIT     = $24                ; Sprites drawn per scanline, 1-32 (reset 16)
 000000r 2               VC_REG_SPRPAL       = $25                ; b3:0 palette group high bits for sprites
-000000r 2               ; $17, $1F, $26-$27 and $28-$7F are reserved: write 0.
+000000r 2               ; $28-$7F — Font, and reserved ($28-$2F are reserved for a blitter)
+000000r 2               VC_REG_FONT         = $30                ; Load a built-in font: b7 layer, b6:0 font ID (see VC_FONT_*)
+000000r 2               ; $17, $1F, $26-$27, $28-$2F and $31-$7F are reserved: write 0.
 000000r 2               
 000000r 2               ; =============================================================================
 000000r 2               ;   SECTION 6: USEFUL CONSTANTS
@@ -1104,6 +1106,28 @@ Current file: VdpTiles.asm
 000000r 2               VC_CAP_SCROLL       = $08                ; STAT6 b3 hardware scroll
 000000r 2               VC_CAP_SCANLINE     = $10                ; STAT6 b4 scanline IRQ
 000000r 2               VC_CAP_VRAM64K      = $20                ; STAT6 b5 64 KB VRAM
+000000r 2                                                        ; STAT6 b6 reserved (a blitter)
+000000r 2               VC_CAP_FONT         = $80                ; STAT6 b7 built-in font: VC_REG_FONT and font $00, loaded at reset
+000000r 2               
+000000r 2               ; --- 6502-PICOVDP: FONT values ---
+000000r 2               ;   Reset writes font VC_FONT_CP437 to $0800-$0FFF (VID_PATTERN_TABLE), so a
+000000r 2               ;   program that selects Text and sets L0PAT = $01 finds it already there.
+000000r 2               ;   A write to VC_REG_FONT loads a font into a layer's pattern table:
+000000r 2               ;   OR a layer into a font ID, e.g. VC_FONT_LAYER1 | VC_FONT_CP437.
+000000r 2               ;     * Every write is a command, even of the value already held.
+000000r 2               ;     * The destination is LxPAT × $800, sampled at the write; a later write
+000000r 2               ;       to L0PAT/L1PAT does not move a pending load.
+000000r 2               ;     * A reserved font ID ($01-$7F) is stored and does nothing else.
+000000r 2               ;     * One load is pending per layer; a second write for that layer replaces it.
+000000r 2               ;     * The load completes at the line start where vertical blank fires, before
+000000r 2               ;       VC_STAT0_F sets.  Until then the table keeps its old contents, and a
+000000r 2               ;       write there is overwritten.  So: read STAT0 to clear F, write
+000000r 2               ;       VC_REG_FONT, and wait for F before touching that range.
+000000r 2               ;     * A reset cancels every pending load.
+000000r 2               ;   Check VC_CAP_FONT in STAT6 first.
+000000r 2               VC_FONT_LAYER0      = $00                ; b7 clear: layer 0's pattern table (L0PAT × $800)
+000000r 2               VC_FONT_LAYER1      = $80                ; b7 set: layer 1's pattern table (L1PAT × $800)
+000000r 2               VC_FONT_CP437       = $00                ; Font $00: CP437, 6×8, 2,048 bytes (glyph n at n × 8)
 000000r 2               
 000000r 2               ; --- 6502-PICOVDP: VRAM ---
 000000r 2               VC_PALETTE          = $FC00              ; Palette at reset PALBASE: 256 entries of %0000RRRR, %GGGGBBBB

@@ -3,7 +3,7 @@
 ; =============================================================================
 ;
 ;   CPU:       WDC 65C02S
-;   Video:     6502-PICOVDP (SPEC draft 0.4)
+;   Video:     6502-PICOVDP (SPEC draft 0.5)
 ;   BIOS:      2.0 (pending)
 ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 ;
@@ -973,7 +973,9 @@ VC_REG_SPRCOUNT     = $22                ; Active sprite slots, 0-64 (reset 32)
 VC_REG_SPRCTRL      = $23                ; Enable, collision, $D0 terminator, depth (see VC_SPRCTRL_*; reset $27)
 VC_REG_SPRLIMIT     = $24                ; Sprites drawn per scanline, 1-32 (reset 16)
 VC_REG_SPRPAL       = $25                ; b3:0 palette group high bits for sprites
-; $17, $1F, $26-$27 and $28-$7F are reserved: write 0.
+; $28-$7F — Font, and reserved ($28-$2F are reserved for a blitter)
+VC_REG_FONT         = $30                ; Load a built-in font: b7 layer, b6:0 font ID (see VC_FONT_*)
+; $17, $1F, $26-$27, $28-$2F and $31-$7F are reserved: write 0.
 
 ; =============================================================================
 ;   SECTION 6: USEFUL CONSTANTS
@@ -1094,6 +1096,28 @@ VC_CAP_FLIP         = $04                ; STAT6 b2 sprite flip
 VC_CAP_SCROLL       = $08                ; STAT6 b3 hardware scroll
 VC_CAP_SCANLINE     = $10                ; STAT6 b4 scanline IRQ
 VC_CAP_VRAM64K      = $20                ; STAT6 b5 64 KB VRAM
+                                         ; STAT6 b6 reserved (a blitter)
+VC_CAP_FONT         = $80                ; STAT6 b7 built-in font: VC_REG_FONT and font $00, loaded at reset
+
+; --- 6502-PICOVDP: FONT values ---
+;   Reset writes font VC_FONT_CP437 to $0800-$0FFF (VID_PATTERN_TABLE), so a
+;   program that selects Text and sets L0PAT = $01 finds it already there.
+;   A write to VC_REG_FONT loads a font into a layer's pattern table:
+;   OR a layer into a font ID, e.g. VC_FONT_LAYER1 | VC_FONT_CP437.
+;     * Every write is a command, even of the value already held.
+;     * The destination is LxPAT × $800, sampled at the write; a later write
+;       to L0PAT/L1PAT does not move a pending load.
+;     * A reserved font ID ($01-$7F) is stored and does nothing else.
+;     * One load is pending per layer; a second write for that layer replaces it.
+;     * The load completes at the line start where vertical blank fires, before
+;       VC_STAT0_F sets.  Until then the table keeps its old contents, and a
+;       write there is overwritten.  So: read STAT0 to clear F, write
+;       VC_REG_FONT, and wait for F before touching that range.
+;     * A reset cancels every pending load.
+;   Check VC_CAP_FONT in STAT6 first.
+VC_FONT_LAYER0      = $00                ; b7 clear: layer 0's pattern table (L0PAT × $800)
+VC_FONT_LAYER1      = $80                ; b7 set: layer 1's pattern table (L1PAT × $800)
+VC_FONT_CP437       = $00                ; Font $00: CP437, 6×8, 2,048 bytes (glyph n at n × 8)
 
 ; --- 6502-PICOVDP: VRAM ---
 VC_PALETTE          = $FC00              ; Palette at reset PALBASE: 256 entries of %0000RRRR, %GGGGBBBB
