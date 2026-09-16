@@ -60,7 +60,7 @@ whose last release is **1.6**.
 - **6502-BIOS** gets a `v1.x` branch cut at `v1.6`; `main` becomes 2.x.
 - **Assembly and C projects** get a VDP include chosen by a build option, not branches.
   The legacy `6502.inc` gets one last update, for 1.6.
-- **EhBASIC and vc83basic** stay 1.x. **PicoCalc** stays legacy and ships BIOS 1.6. **The YouTube series**
+- **EhBASIC and vc83basic** stay 1.x. **PicoCalc** and **KIMULATOR** stay legacy and ship BIOS 1.6. **The YouTube series**
   teaches the legacy VDP and mentions the new features.
 
 ## Order across the workspace
@@ -78,7 +78,8 @@ whose last release is **1.6**.
    `/6502-DOCS/v1/`, against the emulator's frozen 2.7.0 build at `/6502-EMULATOR/v2/`.
 
 Alongside steps 2–5, once step 1 is tagged: **6502-PICOCALC** embeds the `v1.6` ROM and
-releases a new UF2. DOCS waits for that release before cutting `v1`.
+releases a new UF2, and **6502-KIMULATOR** bundles it and releases 1.0.9. DOCS waits for both
+releases before cutting `v1`.
 
 **Part 2: the VDP**
 
@@ -136,6 +137,11 @@ ever wants one) WIZARDSLAB copy it.
    - Copy the result byte-identically to 6502-CRT, 6502-PRG, 6502-BIN, 6502-EHBASIC,
      6502-C (plus `6502.h` declarations) and WIZARDSLAB (`include/ac6502.inc`).
    - Rebuild everything to confirm the binaries are unchanged.
+   - **The KIM includes** get only their header's BIOS version changed to v1.6: this repo's
+     `6502-KIM.inc`, 6502-ASSEMBLY's `01-KIM/Programs/kim.inc` and 6502-KIM's
+     `Firmware/KC Monitor/kim.inc`. No `NV_*` names: a KIM has no RTC, and these includes
+     name only the hardware that is fitted. Rebuild BitRally, Countdown and the KC Monitor to
+     confirm nothing moved.
 1. **Decide the build-option convention**, once, for every repo.
    - **Legacy stays `6502.inc`, unchanged:** BIOS 1.x + TMS9918A.
    - **A new, complete include for BIOS 2.x + PICOVDP** (working name `6502-VDP.inc`).
