@@ -31,9 +31,15 @@
 ;     $FC00-$FDFF   Palette                           VC_PALETTE
 ;
 ;   A VRAM address above $3FFF needs VBANK: the command protocol carries only
-;   address bits 13:0, and bits 15:14 come from VBANK.  The BIOS 1.x Kernal
-;   never writes VBANK, so this program puts it back to 0 after every address
-;   above $3FFF — otherwise the key echo below would land in the palette.
+;   address bits 13:0, and bits 15:14 come from VBANK.  Every Kernal entry
+;   assumes VBANK = 0, so this program puts it back after every address above
+;   $3FFF — otherwise the key echo below would land in the palette.
+;
+;   The Kernal's VDP entries (VdpWriteReg, VdpPoke, VdpSetPalette ...) could do
+;   most of this work.  The program writes the registers itself so that each
+;   feature shows its register once, and calls the Kernal for the two things
+;   worth not writing by hand: WaitVBlank to pace the frames, and InitVideo to
+;   put the text console back.
 ; =============================================================================
 
 ; =============================================================================
@@ -76,12 +82,16 @@ CYCLE_ENTRY     = VC_PALETTE + (GREY_ROW * 16 + 15) * 2
 Start:
   jsr KernalVersion             ; A = major, X = minor
   cmp #2
-  bcs @HaveBios2
-  lda #<GuardMsg                ; Anything older has no PICOVDP support —
-  ldy #>GuardMsg                ;   say so and go back to BASIC
+  bcc @Guard                    ; 1.x has no PICOVDP support (and no VdpInfo:
+                                ;   its slot there is a bare RTS)
+  jsr VdpInfo                   ; Carry set: no PICOVDP console card
+  bcc @HaveCard
+@Guard:
+  lda #<GuardMsg                ; Say so and go back to BASIC
+  ldy #>GuardMsg
   jsr PrintStr
   rts
-@HaveBios2:
+@HaveCard:
 
 ; -----------------------------------------------------------------------------
 ;   Set up layer 0 with the display off, so nothing half-built is ever shown
@@ -232,11 +242,10 @@ Start:
   ldx #VC_REG_MODE1
   jsr SetReg
 
-  lda VC_STATUS                 ; Clear a stale end-of-frame flag
 @Frame:
-  lda VC_STATUS                 ; STATSEL_A is 0, so port A reads STAT0.  The
-  and #VC_STAT0_F               ;   read clears F, which is set again when the
-  beq @Frame                    ;   next picture ends
+  jsr WaitVBlank                ; Polls STAT3 for the next vertical blank, so
+                                ;   the scroll and colour change land between
+                                ;   pictures
 
   inc ScrollX                   ; Graphics mode's map is 256 pixels wide, so
   lda ScrollX                   ;   the byte wraps exactly where the map does
@@ -264,24 +273,11 @@ Start:
   bcc @Frame
 
 ; -----------------------------------------------------------------------------
-;   Put the card back the way the text console expects it, and return
+;   Put the text console back, and return
 ; -----------------------------------------------------------------------------
-
-  lda #VC_VMODE_LEGACY          ; M1/M2/M3 choose the mode again, and
-  ldx #VC_REG_VMODE             ;   InitVideo selects Text through M1
-  jsr SetReg
-  lda #$00                      ; The scroll registers apply in the legacy
-  ldx #VC_REG_L0SCRX            ;   submode too, and InitVideo doesn't
-  jsr SetReg                    ;   write them
-  lda #$00
-  ldx #VC_REG_L0SCRY
-  jsr SetReg
-  lda #(VC_LCTRL_ATTR_NONE | VC_LCTRL_ENABLE | VC_LCTRL_OPAQUE)
-  ldx #VC_REG_L0CTRL            ; L0CTRL's reset value, $3C
-  jsr SetReg
-  lda #(VC_SPRCTRL_ENABLE | VC_SPRCTRL_COLLIDE | VC_SPRCTRL_TERM | VC_SPRCTRL_4BPP)
-  ldx #VC_REG_SPRCTRL           ; SPRCTRL's reset value, $27
-  jsr SetReg
+;   InitVideo writes the whole Text layout (VMODE, table bases, scroll, L0CTRL,
+;   sprites off), reloads the card's font and restores palette row 0.  It
+;   leaves the other rows alone, so the cycled entry in row 1 goes back by hand.
 
   lda #<CYCLE_ENTRY             ; The grayscale ramp's white, back as it was
   ldx #>CYCLE_ENTRY
@@ -292,8 +288,9 @@ Start:
   sta VC_DATA
   jsr ClearVBank
 
-  jsr InitVideo                 ; Text registers and the character set
-  jsr VideoClear                ; The name table still holds tile numbers
+  jsr InitVideo                 ; Text mode, and the font from the card
+  jsr VideoClear                ; The name and attribute tables still hold
+                                ;   tile numbers and sub-palettes
   rts                           ; Back to BASIC
 
 ; =============================================================================
@@ -326,7 +323,7 @@ CycleColour:
   ; Fall through
 
 ; =============================================================================
-;   ClearVBank — back to VRAM bank 0, where the BIOS 1.x Kernal expects it
+;   ClearVBank — back to VRAM bank 0, where the Kernal expects it
 ; =============================================================================
 ;   Modifies: A, X
 

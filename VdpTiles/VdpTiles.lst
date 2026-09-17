@@ -1407,9 +1407,15 @@ Current file: VdpTiles.asm
 000000r 1               ;     $FC00-$FDFF   Palette                           VC_PALETTE
 000000r 1               ;
 000000r 1               ;   A VRAM address above $3FFF needs VBANK: the command protocol carries only
-000000r 1               ;   address bits 13:0, and bits 15:14 come from VBANK.  The BIOS 1.x Kernal
-000000r 1               ;   never writes VBANK, so this program puts it back to 0 after every address
-000000r 1               ;   above $3FFF — otherwise the key echo below would land in the palette.
+000000r 1               ;   address bits 13:0, and bits 15:14 come from VBANK.  Every Kernal entry
+000000r 1               ;   assumes VBANK = 0, so this program puts it back after every address above
+000000r 1               ;   $3FFF — otherwise the key echo below would land in the palette.
+000000r 1               ;
+000000r 1               ;   The Kernal's VDP entries (VdpWriteReg, VdpPoke, VdpSetPalette ...) could do
+000000r 1               ;   most of this work.  The program writes the registers itself so that each
+000000r 1               ;   feature shows its register once, and calls the Kernal for the two things
+000000r 1               ;   worth not writing by hand: WaitVBlank to pace the frames, and InitVideo to
+000000r 1               ;   put the text console back.
 000000r 1               ; =============================================================================
 000000r 1               
 000000r 1               ; =============================================================================
@@ -1454,380 +1460,371 @@ Current file: VdpTiles.asm
 00000Cr 1               Start:
 00000Cr 1  20 7B A0       jsr KernalVersion             ; A = major, X = minor
 00000Fr 1  C9 02          cmp #2
-000011r 1  B0 08          bcs @HaveBios2
-000013r 1  A9 rr          lda #<GuardMsg                ; Anything older has no PICOVDP support —
-000015r 1  A0 rr          ldy #>GuardMsg                ;   say so and go back to BASIC
-000017r 1  20 90 A0       jsr PrintStr
-00001Ar 1  60             rts
-00001Br 1               @HaveBios2:
-00001Br 1               
-00001Br 1               ; -----------------------------------------------------------------------------
-00001Br 1               ;   Set up layer 0 with the display off, so nothing half-built is ever shown
-00001Br 1               ; -----------------------------------------------------------------------------
-00001Br 1               
-00001Br 1  A9 00          lda #$00                      ; MODE1 without VC_MODE1_DISP: display off
-00001Dr 1  A2 01          ldx #VC_REG_MODE1             ;   (M1 and M2 clear too; VMODE decides the mode)
-00001Fr 1  20 rr rr       jsr SetReg
-000022r 1               
-000022r 1  A9 03          lda #VC_VMODE_GRAPHICS        ; 32×30 cells of 8×8, 256×240
-000024r 1  A2 0D          ldx #VC_REG_VMODE
-000026r 1  20 rr rr       jsr SetReg
-000029r 1               
-000029r 1  A9 32          lda #(VC_LCTRL_4BPP | VC_LCTRL_ATTR_CELL | VC_LCTRL_ENABLE | VC_LCTRL_OPAQUE)
-00002Br 1  A2 15          ldx #VC_REG_L0CTRL            ; 4bpp, an attribute byte per cell, on, opaque
-00002Dr 1  20 rr rr       jsr SetReg
-000030r 1               
-000030r 1  A9 00          lda #(NAME_TABLE >> 10)       ; Table bases in 1 KB steps ...
-000032r 1  A2 10          ldx #VC_REG_L0NAME
-000034r 1  20 rr rr       jsr SetReg
-000037r 1  A9 01          lda #(ATTR_TABLE >> 10)
-000039r 1  A2 11          ldx #VC_REG_L0ATTR
-00003Br 1  20 rr rr       jsr SetReg
-00003Er 1  A9 08          lda #(PATTERN_TABLE >> 11)    ; ... and the pattern table in 2 KB steps
-000040r 1  A2 12          ldx #VC_REG_L0PAT
-000042r 1  20 rr rr       jsr SetReg
-000045r 1               
-000045r 1  A9 00          lda #$00
-000047r 1  A2 16          ldx #VC_REG_L0PAL             ; Attribute sub-palettes index rows 0-15
-000049r 1  20 rr rr       jsr SetReg
-00004Cr 1  A9 00          lda #$00
-00004Er 1  A2 13          ldx #VC_REG_L0SCRX            ; Start unscrolled
-000050r 1  20 rr rr       jsr SetReg
-000053r 1  A9 00          lda #$00
-000055r 1  A2 14          ldx #VC_REG_L0SCRY
-000057r 1  20 rr rr       jsr SetReg
-00005Ar 1               
-00005Ar 1  A9 00          lda #$00                      ; Sprites off: without VC_SPRCTRL_ENABLE no
-00005Cr 1  A2 23          ldx #VC_REG_SPRCTRL           ;   sprite is evaluated or drawn
-00005Er 1  20 rr rr       jsr SetReg
-000061r 1               
-000061r 1  A9 01          lda #TMS_BLACK                ; Low nibble: the backdrop, palette row 0.  In
-000063r 1  A2 07          ldx #VC_REG_COLOR             ;   Graphics mode it shows as the side borders
-000065r 1  20 rr rr       jsr SetReg
-000068r 1               
-000068r 1               ; -----------------------------------------------------------------------------
-000068r 1               ;   Upload the four tiles
-000068r 1               ; -----------------------------------------------------------------------------
-000068r 1               
-000068r 1  A9 00          lda #<PATTERN_TABLE
-00006Ar 1  A2 40          ldx #>PATTERN_TABLE
-00006Cr 1  20 rr rr       jsr SetWriteAddr              ; VBANK = 1 for $4000
-00006Fr 1  A2 00          ldx #$00
-000071r 1               @Tiles:
-000071r 1  BD rr rr       lda Tiles,x
-000074r 1  8D 00 9C       sta VC_DATA                   ; The pointer advances by VINC (+1)
-000077r 1  E8             inx
-000078r 1  E0 80          cpx #(TILE_BYTES * TILE_COUNT)
-00007Ar 1  D0 F5          bne @Tiles
-00007Cr 1  20 rr rr       jsr ClearVBank
-00007Fr 1               
-00007Fr 1               ; -----------------------------------------------------------------------------
-00007Fr 1               ;   Fill the name table: tiles 0-3 in a 2×2 repeat
-00007Fr 1               ; -----------------------------------------------------------------------------
-00007Fr 1               ;   Cell (col, row) shows tile (col & 1) + 2 × (row & 1).  32 and 30 are both
-00007Fr 1               ;   even, so the pattern wraps seamlessly when the layer scrolls.
-00007Fr 1               
-00007Fr 1  A9 00          lda #<NAME_TABLE
-000081r 1  A2 00          ldx #>NAME_TABLE
-000083r 1  20 rr rr       jsr SetWriteAddr
-000086r 1  A0 00          ldy #$00                      ; Y = row
-000088r 1               @NameRow:
-000088r 1  A2 00          ldx #$00                      ; X = column
-00008Ar 1               @NameCell:
-00008Ar 1  98             tya
-00008Br 1  29 01          and #$01
-00008Dr 1  0A             asl a
-00008Er 1  8D rr rr       sta Temp                      ; 2 × (row & 1)
-000091r 1  8A             txa
-000092r 1  29 01          and #$01
-000094r 1  0D rr rr       ora Temp                      ; + (col & 1)
-000097r 1  8D 00 9C       sta VC_DATA
-00009Ar 1  E8             inx
-00009Br 1  E0 20          cpx #COLS
-00009Dr 1  D0 EB          bne @NameCell
-00009Fr 1  C8             iny
-0000A0r 1  C0 1E          cpy #ROWS
-0000A2r 1  D0 E4          bne @NameRow
-0000A4r 1               
-0000A4r 1               ; -----------------------------------------------------------------------------
-0000A4r 1               ;   Fill the attribute table: a sub-palette for every cell
-0000A4r 1               ; -----------------------------------------------------------------------------
-0000A4r 1               ;   Tile 3 takes the grayscale row, where its diamond is the cycling colour.
-0000A4r 1               ;   Every other cell takes a hue row, stepping by one every two cells across
-0000A4r 1               ;   and every two cells down, so the hues run in diagonal bands.  The flip,
-0000A4r 1               ;   priority and ninth-bit fields (VC_ATTR_*) stay 0.
-0000A4r 1               
-0000A4r 1  A9 00          lda #<ATTR_TABLE
-0000A6r 1  A2 04          ldx #>ATTR_TABLE
-0000A8r 1  20 rr rr       jsr SetWriteAddr
-0000ABr 1  A0 00          ldy #$00                      ; Y = row
-0000ADr 1               @AttrRow:
-0000ADr 1  A2 00          ldx #$00                      ; X = column
-0000AFr 1               @AttrCell:
-0000AFr 1  8A             txa
-0000B0r 1  29 01          and #$01
-0000B2r 1  F0 09          beq @AttrHue
-0000B4r 1  98             tya
+000011r 1  90 05          bcc @Guard                    ; 1.x has no PICOVDP support (and no VdpInfo:
+000013r 1                                               ;   its slot there is a bare RTS)
+000013r 1  20 B1 A0       jsr VdpInfo                   ; Carry set: no PICOVDP console card
+000016r 1  90 08          bcc @HaveCard
+000018r 1               @Guard:
+000018r 1  A9 rr          lda #<GuardMsg                ; Say so and go back to BASIC
+00001Ar 1  A0 rr          ldy #>GuardMsg
+00001Cr 1  20 90 A0       jsr PrintStr
+00001Fr 1  60             rts
+000020r 1               @HaveCard:
+000020r 1               
+000020r 1               ; -----------------------------------------------------------------------------
+000020r 1               ;   Set up layer 0 with the display off, so nothing half-built is ever shown
+000020r 1               ; -----------------------------------------------------------------------------
+000020r 1               
+000020r 1  A9 00          lda #$00                      ; MODE1 without VC_MODE1_DISP: display off
+000022r 1  A2 01          ldx #VC_REG_MODE1             ;   (M1 and M2 clear too; VMODE decides the mode)
+000024r 1  20 rr rr       jsr SetReg
+000027r 1               
+000027r 1  A9 03          lda #VC_VMODE_GRAPHICS        ; 32×30 cells of 8×8, 256×240
+000029r 1  A2 0D          ldx #VC_REG_VMODE
+00002Br 1  20 rr rr       jsr SetReg
+00002Er 1               
+00002Er 1  A9 32          lda #(VC_LCTRL_4BPP | VC_LCTRL_ATTR_CELL | VC_LCTRL_ENABLE | VC_LCTRL_OPAQUE)
+000030r 1  A2 15          ldx #VC_REG_L0CTRL            ; 4bpp, an attribute byte per cell, on, opaque
+000032r 1  20 rr rr       jsr SetReg
+000035r 1               
+000035r 1  A9 00          lda #(NAME_TABLE >> 10)       ; Table bases in 1 KB steps ...
+000037r 1  A2 10          ldx #VC_REG_L0NAME
+000039r 1  20 rr rr       jsr SetReg
+00003Cr 1  A9 01          lda #(ATTR_TABLE >> 10)
+00003Er 1  A2 11          ldx #VC_REG_L0ATTR
+000040r 1  20 rr rr       jsr SetReg
+000043r 1  A9 08          lda #(PATTERN_TABLE >> 11)    ; ... and the pattern table in 2 KB steps
+000045r 1  A2 12          ldx #VC_REG_L0PAT
+000047r 1  20 rr rr       jsr SetReg
+00004Ar 1               
+00004Ar 1  A9 00          lda #$00
+00004Cr 1  A2 16          ldx #VC_REG_L0PAL             ; Attribute sub-palettes index rows 0-15
+00004Er 1  20 rr rr       jsr SetReg
+000051r 1  A9 00          lda #$00
+000053r 1  A2 13          ldx #VC_REG_L0SCRX            ; Start unscrolled
+000055r 1  20 rr rr       jsr SetReg
+000058r 1  A9 00          lda #$00
+00005Ar 1  A2 14          ldx #VC_REG_L0SCRY
+00005Cr 1  20 rr rr       jsr SetReg
+00005Fr 1               
+00005Fr 1  A9 00          lda #$00                      ; Sprites off: without VC_SPRCTRL_ENABLE no
+000061r 1  A2 23          ldx #VC_REG_SPRCTRL           ;   sprite is evaluated or drawn
+000063r 1  20 rr rr       jsr SetReg
+000066r 1               
+000066r 1  A9 01          lda #TMS_BLACK                ; Low nibble: the backdrop, palette row 0.  In
+000068r 1  A2 07          ldx #VC_REG_COLOR             ;   Graphics mode it shows as the side borders
+00006Ar 1  20 rr rr       jsr SetReg
+00006Dr 1               
+00006Dr 1               ; -----------------------------------------------------------------------------
+00006Dr 1               ;   Upload the four tiles
+00006Dr 1               ; -----------------------------------------------------------------------------
+00006Dr 1               
+00006Dr 1  A9 00          lda #<PATTERN_TABLE
+00006Fr 1  A2 40          ldx #>PATTERN_TABLE
+000071r 1  20 rr rr       jsr SetWriteAddr              ; VBANK = 1 for $4000
+000074r 1  A2 00          ldx #$00
+000076r 1               @Tiles:
+000076r 1  BD rr rr       lda Tiles,x
+000079r 1  8D 00 9C       sta VC_DATA                   ; The pointer advances by VINC (+1)
+00007Cr 1  E8             inx
+00007Dr 1  E0 80          cpx #(TILE_BYTES * TILE_COUNT)
+00007Fr 1  D0 F5          bne @Tiles
+000081r 1  20 rr rr       jsr ClearVBank
+000084r 1               
+000084r 1               ; -----------------------------------------------------------------------------
+000084r 1               ;   Fill the name table: tiles 0-3 in a 2×2 repeat
+000084r 1               ; -----------------------------------------------------------------------------
+000084r 1               ;   Cell (col, row) shows tile (col & 1) + 2 × (row & 1).  32 and 30 are both
+000084r 1               ;   even, so the pattern wraps seamlessly when the layer scrolls.
+000084r 1               
+000084r 1  A9 00          lda #<NAME_TABLE
+000086r 1  A2 00          ldx #>NAME_TABLE
+000088r 1  20 rr rr       jsr SetWriteAddr
+00008Br 1  A0 00          ldy #$00                      ; Y = row
+00008Dr 1               @NameRow:
+00008Dr 1  A2 00          ldx #$00                      ; X = column
+00008Fr 1               @NameCell:
+00008Fr 1  98             tya
+000090r 1  29 01          and #$01
+000092r 1  0A             asl a
+000093r 1  8D rr rr       sta Temp                      ; 2 × (row & 1)
+000096r 1  8A             txa
+000097r 1  29 01          and #$01
+000099r 1  0D rr rr       ora Temp                      ; + (col & 1)
+00009Cr 1  8D 00 9C       sta VC_DATA
+00009Fr 1  E8             inx
+0000A0r 1  E0 20          cpx #COLS
+0000A2r 1  D0 EB          bne @NameCell
+0000A4r 1  C8             iny
+0000A5r 1  C0 1E          cpy #ROWS
+0000A7r 1  D0 E4          bne @NameRow
+0000A9r 1               
+0000A9r 1               ; -----------------------------------------------------------------------------
+0000A9r 1               ;   Fill the attribute table: a sub-palette for every cell
+0000A9r 1               ; -----------------------------------------------------------------------------
+0000A9r 1               ;   Tile 3 takes the grayscale row, where its diamond is the cycling colour.
+0000A9r 1               ;   Every other cell takes a hue row, stepping by one every two cells across
+0000A9r 1               ;   and every two cells down, so the hues run in diagonal bands.  The flip,
+0000A9r 1               ;   priority and ninth-bit fields (VC_ATTR_*) stay 0.
+0000A9r 1               
+0000A9r 1  A9 00          lda #<ATTR_TABLE
+0000ABr 1  A2 04          ldx #>ATTR_TABLE
+0000ADr 1  20 rr rr       jsr SetWriteAddr
+0000B0r 1  A0 00          ldy #$00                      ; Y = row
+0000B2r 1               @AttrRow:
+0000B2r 1  A2 00          ldx #$00                      ; X = column
+0000B4r 1               @AttrCell:
+0000B4r 1  8A             txa
 0000B5r 1  29 01          and #$01
-0000B7r 1  F0 04          beq @AttrHue
-0000B9r 1  A9 01          lda #GREY_ROW                 ; Tile 3
-0000BBr 1  80 15          bra @AttrStore
-0000BDr 1               @AttrHue:
-0000BDr 1  8A             txa
-0000BEr 1  4A             lsr a
-0000BFr 1  8D rr rr       sta Temp                      ; col / 2 (0-15)
-0000C2r 1  98             tya
-0000C3r 1  4A             lsr a                         ; row / 2 (0-14)
-0000C4r 1  18             clc
-0000C5r 1  6D rr rr       adc Temp                      ; 0-29
-0000C8r 1               @AttrMod:
-0000C8r 1  C9 0C          cmp #HUE_ROWS                 ; mod 12
-0000CAr 1  90 04          bcc @AttrHueRow
-0000CCr 1  E9 0C          sbc #HUE_ROWS                 ; C is set here
-0000CEr 1  80 F8          bra @AttrMod
-0000D0r 1               @AttrHueRow:
-0000D0r 1  69 02          adc #FIRST_HUE_ROW            ; C is clear here
-0000D2r 1               @AttrStore:
-0000D2r 1  29 0F          and #VC_ATTR_SUBPAL
-0000D4r 1  8D 00 9C       sta VC_DATA
-0000D7r 1  E8             inx
-0000D8r 1  E0 20          cpx #COLS
-0000DAr 1  D0 D3          bne @AttrCell
-0000DCr 1  C8             iny
-0000DDr 1  C0 1E          cpy #ROWS
-0000DFr 1  D0 CC          bne @AttrRow
-0000E1r 1               
-0000E1r 1               ; -----------------------------------------------------------------------------
-0000E1r 1               ;   Display on, and run a frame at a time until a key is pressed
-0000E1r 1               ; -----------------------------------------------------------------------------
-0000E1r 1               
-0000E1r 1  9C rr rr       stz ScrollX
-0000E4r 1  9C rr rr       stz ScrollY
-0000E7r 1  9C rr rr       stz FrameCount
-0000EAr 1  9C rr rr       stz HueIndex
-0000EDr 1               
-0000EDr 1  A9 40          lda #VC_MODE1_DISP
-0000EFr 1  A2 01          ldx #VC_REG_MODE1
-0000F1r 1  20 rr rr       jsr SetReg
-0000F4r 1               
-0000F4r 1  AD 01 9C       lda VC_STATUS                 ; Clear a stale end-of-frame flag
-0000F7r 1               @Frame:
-0000F7r 1  AD 01 9C       lda VC_STATUS                 ; STATSEL_A is 0, so port A reads STAT0.  The
-0000FAr 1  29 80          and #VC_STAT0_F               ;   read clears F, which is set again when the
-0000FCr 1  F0 F9          beq @Frame                    ;   next picture ends
-0000FEr 1               
-0000FEr 1  EE rr rr       inc ScrollX                   ; Graphics mode's map is 256 pixels wide, so
-000101r 1  AD rr rr       lda ScrollX                   ;   the byte wraps exactly where the map does
-000104r 1  A2 13          ldx #VC_REG_L0SCRX            ; Increasing SCRX moves the picture left
-000106r 1  20 rr rr       jsr SetReg
-000109r 1               
-000109r 1  EE rr rr       inc ScrollY                   ; ... but only 240 high, so wrap by hand
-00010Cr 1  AD rr rr       lda ScrollY
-00010Fr 1  C9 F0          cmp #MAP_HEIGHT
-000111r 1  90 05          bcc @SetScrollY
-000113r 1  A9 00          lda #$00
-000115r 1  8D rr rr       sta ScrollY
-000118r 1               @SetScrollY:
-000118r 1  A2 14          ldx #VC_REG_L0SCRY            ; Increasing SCRY moves the picture up
-00011Ar 1  20 rr rr       jsr SetReg
-00011Dr 1               
-00011Dr 1  EE rr rr       inc FrameCount
-000120r 1  AD rr rr       lda FrameCount
-000123r 1  29 07          and #$07                      ; Every eighth frame, the next hue
-000125r 1  D0 03          bne @CheckKey
-000127r 1  20 rr rr       jsr CycleColour
-00012Ar 1               
-00012Ar 1               @CheckKey:
-00012Ar 1  20 03 A0       jsr Chrin                     ; C = 1 if a key is waiting
-00012Dr 1  90 C8          bcc @Frame
-00012Fr 1               
-00012Fr 1               ; -----------------------------------------------------------------------------
-00012Fr 1               ;   Put the card back the way the text console expects it, and return
-00012Fr 1               ; -----------------------------------------------------------------------------
-00012Fr 1               
-00012Fr 1  A9 00          lda #VC_VMODE_LEGACY          ; M1/M2/M3 choose the mode again, and
-000131r 1  A2 0D          ldx #VC_REG_VMODE             ;   InitVideo selects Text through M1
-000133r 1  20 rr rr       jsr SetReg
-000136r 1  A9 00          lda #$00                      ; The scroll registers apply in the legacy
-000138r 1  A2 13          ldx #VC_REG_L0SCRX            ;   submode too, and InitVideo doesn't
-00013Ar 1  20 rr rr       jsr SetReg                    ;   write them
-00013Dr 1  A9 00          lda #$00
-00013Fr 1  A2 14          ldx #VC_REG_L0SCRY
-000141r 1  20 rr rr       jsr SetReg
-000144r 1  A9 3C          lda #(VC_LCTRL_ATTR_NONE | VC_LCTRL_ENABLE | VC_LCTRL_OPAQUE)
-000146r 1  A2 15          ldx #VC_REG_L0CTRL            ; L0CTRL's reset value, $3C
-000148r 1  20 rr rr       jsr SetReg
-00014Br 1  A9 27          lda #(VC_SPRCTRL_ENABLE | VC_SPRCTRL_COLLIDE | VC_SPRCTRL_TERM | VC_SPRCTRL_4BPP)
-00014Dr 1  A2 23          ldx #VC_REG_SPRCTRL           ; SPRCTRL's reset value, $27
-00014Fr 1  20 rr rr       jsr SetReg
-000152r 1               
-000152r 1  A9 3E          lda #<CYCLE_ENTRY             ; The grayscale ramp's white, back as it was
-000154r 1  A2 FC          ldx #>CYCLE_ENTRY
-000156r 1  20 rr rr       jsr SetWriteAddr
-000159r 1  A9 0F          lda #$0F                      ; %0000RRRR
-00015Br 1  8D 00 9C       sta VC_DATA
-00015Er 1  A9 FF          lda #$FF                      ; %GGGGBBBB
-000160r 1  8D 00 9C       sta VC_DATA
-000163r 1  20 rr rr       jsr ClearVBank
-000166r 1               
-000166r 1  20 15 A0       jsr InitVideo                 ; Text registers and the character set
-000169r 1  20 18 A0       jsr VideoClear                ; The name table still holds tile numbers
-00016Cr 1  60             rts                           ; Back to BASIC
+0000B7r 1  F0 09          beq @AttrHue
+0000B9r 1  98             tya
+0000BAr 1  29 01          and #$01
+0000BCr 1  F0 04          beq @AttrHue
+0000BEr 1  A9 01          lda #GREY_ROW                 ; Tile 3
+0000C0r 1  80 15          bra @AttrStore
+0000C2r 1               @AttrHue:
+0000C2r 1  8A             txa
+0000C3r 1  4A             lsr a
+0000C4r 1  8D rr rr       sta Temp                      ; col / 2 (0-15)
+0000C7r 1  98             tya
+0000C8r 1  4A             lsr a                         ; row / 2 (0-14)
+0000C9r 1  18             clc
+0000CAr 1  6D rr rr       adc Temp                      ; 0-29
+0000CDr 1               @AttrMod:
+0000CDr 1  C9 0C          cmp #HUE_ROWS                 ; mod 12
+0000CFr 1  90 04          bcc @AttrHueRow
+0000D1r 1  E9 0C          sbc #HUE_ROWS                 ; C is set here
+0000D3r 1  80 F8          bra @AttrMod
+0000D5r 1               @AttrHueRow:
+0000D5r 1  69 02          adc #FIRST_HUE_ROW            ; C is clear here
+0000D7r 1               @AttrStore:
+0000D7r 1  29 0F          and #VC_ATTR_SUBPAL
+0000D9r 1  8D 00 9C       sta VC_DATA
+0000DCr 1  E8             inx
+0000DDr 1  E0 20          cpx #COLS
+0000DFr 1  D0 D3          bne @AttrCell
+0000E1r 1  C8             iny
+0000E2r 1  C0 1E          cpy #ROWS
+0000E4r 1  D0 CC          bne @AttrRow
+0000E6r 1               
+0000E6r 1               ; -----------------------------------------------------------------------------
+0000E6r 1               ;   Display on, and run a frame at a time until a key is pressed
+0000E6r 1               ; -----------------------------------------------------------------------------
+0000E6r 1               
+0000E6r 1  9C rr rr       stz ScrollX
+0000E9r 1  9C rr rr       stz ScrollY
+0000ECr 1  9C rr rr       stz FrameCount
+0000EFr 1  9C rr rr       stz HueIndex
+0000F2r 1               
+0000F2r 1  A9 40          lda #VC_MODE1_DISP
+0000F4r 1  A2 01          ldx #VC_REG_MODE1
+0000F6r 1  20 rr rr       jsr SetReg
+0000F9r 1               
+0000F9r 1               @Frame:
+0000F9r 1  20 C3 A0       jsr WaitVBlank                ; Polls STAT3 for the next vertical blank, so
+0000FCr 1                                               ;   the scroll and colour change land between
+0000FCr 1                                               ;   pictures
+0000FCr 1               
+0000FCr 1  EE rr rr       inc ScrollX                   ; Graphics mode's map is 256 pixels wide, so
+0000FFr 1  AD rr rr       lda ScrollX                   ;   the byte wraps exactly where the map does
+000102r 1  A2 13          ldx #VC_REG_L0SCRX            ; Increasing SCRX moves the picture left
+000104r 1  20 rr rr       jsr SetReg
+000107r 1               
+000107r 1  EE rr rr       inc ScrollY                   ; ... but only 240 high, so wrap by hand
+00010Ar 1  AD rr rr       lda ScrollY
+00010Dr 1  C9 F0          cmp #MAP_HEIGHT
+00010Fr 1  90 05          bcc @SetScrollY
+000111r 1  A9 00          lda #$00
+000113r 1  8D rr rr       sta ScrollY
+000116r 1               @SetScrollY:
+000116r 1  A2 14          ldx #VC_REG_L0SCRY            ; Increasing SCRY moves the picture up
+000118r 1  20 rr rr       jsr SetReg
+00011Br 1               
+00011Br 1  EE rr rr       inc FrameCount
+00011Er 1  AD rr rr       lda FrameCount
+000121r 1  29 07          and #$07                      ; Every eighth frame, the next hue
+000123r 1  D0 03          bne @CheckKey
+000125r 1  20 rr rr       jsr CycleColour
+000128r 1               
+000128r 1               @CheckKey:
+000128r 1  20 03 A0       jsr Chrin                     ; C = 1 if a key is waiting
+00012Br 1  90 CC          bcc @Frame
+00012Dr 1               
+00012Dr 1               ; -----------------------------------------------------------------------------
+00012Dr 1               ;   Put the text console back, and return
+00012Dr 1               ; -----------------------------------------------------------------------------
+00012Dr 1               ;   InitVideo writes the whole Text layout (VMODE, table bases, scroll, L0CTRL,
+00012Dr 1               ;   sprites off), reloads the card's font and restores palette row 0.  It
+00012Dr 1               ;   leaves the other rows alone, so the cycled entry in row 1 goes back by hand.
+00012Dr 1               
+00012Dr 1  A9 3E          lda #<CYCLE_ENTRY             ; The grayscale ramp's white, back as it was
+00012Fr 1  A2 FC          ldx #>CYCLE_ENTRY
+000131r 1  20 rr rr       jsr SetWriteAddr
+000134r 1  A9 0F          lda #$0F                      ; %0000RRRR
+000136r 1  8D 00 9C       sta VC_DATA
+000139r 1  A9 FF          lda #$FF                      ; %GGGGBBBB
+00013Br 1  8D 00 9C       sta VC_DATA
+00013Er 1  20 rr rr       jsr ClearVBank
+000141r 1               
+000141r 1  20 15 A0       jsr InitVideo                 ; Text mode, and the font from the card
+000144r 1  20 18 A0       jsr VideoClear                ; The name and attribute tables still hold
+000147r 1                                               ;   tile numbers and sub-palettes
+000147r 1  60             rts                           ; Back to BASIC
+000148r 1               
+000148r 1               ; =============================================================================
+000148r 1               ;   CycleColour — write the next hue into palette entry CYCLE_ENTRY
+000148r 1               ; =============================================================================
+000148r 1               ;   The PICOVDP watches VRAM writes to the palette window, so the new colour
+000148r 1               ;   is on screen from the next line drawn.  No reload, no dirty flag.
+000148r 1               ;   Modifies: A, X
+000148r 1               
+000148r 1               CycleColour:
+000148r 1  AD rr rr       lda HueIndex
+00014Br 1  1A             inc a
+00014Cr 1  C9 0C          cmp #HUE_ROWS
+00014Er 1  90 02          bcc @Store
+000150r 1  A9 00          lda #$00
+000152r 1               @Store:
+000152r 1  8D rr rr       sta HueIndex
+000155r 1               
+000155r 1  A9 3E          lda #<CYCLE_ENTRY
+000157r 1  A2 FC          ldx #>CYCLE_ENTRY
+000159r 1  20 rr rr       jsr SetWriteAddr              ; VBANK = 3 for $FC3E
+00015Cr 1               
+00015Cr 1  AD rr rr       lda HueIndex
+00015Fr 1  0A             asl a
+000160r 1  AA             tax                           ; X = offset of the 2-byte entry
+000161r 1  BD rr rr       lda Hues,x
+000164r 1  8D 00 9C       sta VC_DATA                   ; %0000RRRR
+000167r 1  BD rr rr       lda Hues+1,x
+00016Ar 1  8D 00 9C       sta VC_DATA                   ; %GGGGBBBB
+00016Dr 1                 ; Fall through
 00016Dr 1               
 00016Dr 1               ; =============================================================================
-00016Dr 1               ;   CycleColour — write the next hue into palette entry CYCLE_ENTRY
+00016Dr 1               ;   ClearVBank — back to VRAM bank 0, where the Kernal expects it
 00016Dr 1               ; =============================================================================
-00016Dr 1               ;   The PICOVDP watches VRAM writes to the palette window, so the new colour
-00016Dr 1               ;   is on screen from the next line drawn.  No reload, no dirty flag.
 00016Dr 1               ;   Modifies: A, X
 00016Dr 1               
-00016Dr 1               CycleColour:
-00016Dr 1  AD rr rr       lda HueIndex
-000170r 1  1A             inc a
-000171r 1  C9 0C          cmp #HUE_ROWS
-000173r 1  90 02          bcc @Store
-000175r 1  A9 00          lda #$00
-000177r 1               @Store:
-000177r 1  8D rr rr       sta HueIndex
-00017Ar 1               
-00017Ar 1  A9 3E          lda #<CYCLE_ENTRY
-00017Cr 1  A2 FC          ldx #>CYCLE_ENTRY
-00017Er 1  20 rr rr       jsr SetWriteAddr              ; VBANK = 3 for $FC3E
-000181r 1               
-000181r 1  AD rr rr       lda HueIndex
-000184r 1  0A             asl a
-000185r 1  AA             tax                           ; X = offset of the 2-byte entry
-000186r 1  BD rr rr       lda Hues,x
-000189r 1  8D 00 9C       sta VC_DATA                   ; %0000RRRR
-00018Cr 1  BD rr rr       lda Hues+1,x
-00018Fr 1  8D 00 9C       sta VC_DATA                   ; %GGGGBBBB
-000192r 1                 ; Fall through
-000192r 1               
-000192r 1               ; =============================================================================
-000192r 1               ;   ClearVBank — back to VRAM bank 0, where the BIOS 1.x Kernal expects it
-000192r 1               ; =============================================================================
-000192r 1               ;   Modifies: A, X
-000192r 1               
-000192r 1               ClearVBank:
-000192r 1  A9 00          lda #$00
-000194r 1  A2 08          ldx #VC_REG_VBANK
-000196r 1                 ; Fall through
-000196r 1               
-000196r 1               ; =============================================================================
-000196r 1               ;   SetReg — write a PICOVDP register through port A
-000196r 1               ; =============================================================================
-000196r 1               ;   In: A = value, X = register number (VC_REG_*)
-000196r 1               ;   Modifies: A
-000196r 1               
-000196r 1               SetReg:
-000196r 1  8D 01 9C       sta VC_REG                    ; Payload first ...
-000199r 1  8A             txa
-00019Ar 1  09 80          ora #VC_REG_WRITE             ; ... then %1rrrrrrr
-00019Cr 1  8D 01 9C       sta VC_REG
-00019Fr 1  60             rts
-0001A0r 1               
-0001A0r 1               ; =============================================================================
-0001A0r 1               ;   SetWriteAddr — point port A at a 16-bit VRAM address, for writing
-0001A0r 1               ; =============================================================================
-0001A0r 1               ;   Writes VBANK with address bits 15:14, then sends the address command, which
-0001A0r 1               ;   samples it.  Leaves VBANK set; ClearVBank puts it back.
-0001A0r 1               ;   In: A = address low, X = address high
-0001A0r 1               ;   Modifies: A, X
-0001A0r 1               
-0001A0r 1               SetWriteAddr:
-0001A0r 1  48             pha                           ; Save the low byte
-0001A1r 1  DA             phx                           ; Save the high byte
-0001A2r 1  8A             txa
-0001A3r 1  4A             lsr a                         ; Bits 15:14 down to 1:0
-0001A4r 1  4A             lsr a
-0001A5r 1  4A             lsr a
-0001A6r 1  4A             lsr a
-0001A7r 1  4A             lsr a
-0001A8r 1  4A             lsr a
-0001A9r 1  A2 08          ldx #VC_REG_VBANK
-0001ABr 1  20 rr rr       jsr SetReg
-0001AEr 1  68             pla                           ; High byte
-0001AFr 1  29 3F          and #$3F                      ; Bits 13:8
-0001B1r 1  09 40          ora #VC_ADDR_WRITE            ; %01aaaaaa
-0001B3r 1  AA             tax
-0001B4r 1  68             pla                           ; Low byte
-0001B5r 1  8D 01 9C       sta VC_REG                    ; Payload: address bits 7:0
-0001B8r 1  8E 01 9C       stx VC_REG                    ; Command
-0001BBr 1  60             rts
-0001BCr 1               
-0001BCr 1               ; =============================================================================
-0001BCr 1               ;   Data
-0001BCr 1               ; =============================================================================
-0001BCr 1               
-0001BCr 1               GuardMsg:
-0001BCr 1  4E 45 45 44    .byte "NEEDS BIOS 2 AND A 6502-PICOVDP", CHAR_CR, CHAR_LF, $00
-0001C0r 1  53 20 42 49  
-0001C4r 1  4F 53 20 32  
-0001DEr 1               
-0001DEr 1               ; The pure hue of each row 2-13 (index 7 of each ramp, SPEC §11), as palette
-0001DEr 1               ; entries: %0000RRRR, %GGGGBBBB.
-0001DEr 1               Hues:
-0001DEr 1  0F 00          .byte $0F, $00                ; Red
-0001E0r 1  0F 80          .byte $0F, $80                ; Orange
-0001E2r 1  0F F0          .byte $0F, $F0                ; Yellow
-0001E4r 1  08 F0          .byte $08, $F0                ; Chartreuse
-0001E6r 1  00 F0          .byte $00, $F0                ; Green
-0001E8r 1  00 F8          .byte $00, $F8                ; Spring green
-0001EAr 1  00 FF          .byte $00, $FF                ; Cyan
-0001ECr 1  00 8F          .byte $00, $8F                ; Azure
-0001EEr 1  00 0F          .byte $00, $0F                ; Blue
-0001F0r 1  08 0F          .byte $08, $0F                ; Violet
-0001F2r 1  0F 0F          .byte $0F, $0F                ; Magenta
-0001F4r 1  0F 08          .byte $0F, $08                ; Rose
-0001F6r 1               
-0001F6r 1               ; Four 4bpp tiles, 32 bytes each: eight rows from the top, two pixels a byte,
-0001F6r 1               ; the high nibble leftmost (SPEC §8).  Each nibble is a colour within the
-0001F6r 1               ; cell's sub-palette row.
-0001F6r 1               Tiles:
-0001F6r 1               ; Tile 0 — a bevelled block: light top and left edges, dark bottom and right
-0001F6r 1  DD DD DD DB    .byte $DD, $DD, $DD, $DB      ; DDDDDDDB
-0001FAr 1  DB 99 99 73    .byte $DB, $99, $99, $73      ; DB999973
-0001FEr 1  D9 77 77 53    .byte $D9, $77, $77, $53      ; D9777753
-000202r 1  D9 77 77 53    .byte $D9, $77, $77, $53      ; D9777753
-000206r 1  D9 77 77 53    .byte $D9, $77, $77, $53      ; D9777753
-00020Ar 1  D9 77 77 53    .byte $D9, $77, $77, $53      ; D9777753
-00020Er 1  D7 55 55 53    .byte $D7, $55, $55, $53      ; D7555553
-000212r 1  B3 33 33 31    .byte $B3, $33, $33, $31      ; B3333331
-000216r 1               
-000216r 1               ; Tile 1 — diagonal stripes, seamless when tiled
-000216r 1  99 94 44 44    .byte $99, $94, $44, $44      ; 99944444
-00021Ar 1  49 99 44 44    .byte $49, $99, $44, $44      ; 49994444
-00021Er 1  44 99 94 44    .byte $44, $99, $94, $44      ; 44999444
-000222r 1  44 49 99 44    .byte $44, $49, $99, $44      ; 44499944
-000226r 1  44 44 99 94    .byte $44, $44, $99, $94      ; 44449994
-00022Ar 1  44 44 49 99    .byte $44, $44, $49, $99      ; 44444999
-00022Er 1  94 44 44 99    .byte $94, $44, $44, $99      ; 94444499
-000232r 1  99 44 44 49    .byte $99, $44, $44, $49      ; 99444449
-000236r 1               
-000236r 1               ; Tile 2 — a 2×2 checker
-000236r 1  66 BB 66 BB    .byte $66, $BB, $66, $BB      ; 66BB66BB
-00023Ar 1  66 BB 66 BB    .byte $66, $BB, $66, $BB      ; 66BB66BB
-00023Er 1  BB 66 BB 66    .byte $BB, $66, $BB, $66      ; BB66BB66
-000242r 1  BB 66 BB 66    .byte $BB, $66, $BB, $66      ; BB66BB66
-000246r 1  66 BB 66 BB    .byte $66, $BB, $66, $BB      ; 66BB66BB
-00024Ar 1  66 BB 66 BB    .byte $66, $BB, $66, $BB      ; 66BB66BB
-00024Er 1  BB 66 BB 66    .byte $BB, $66, $BB, $66      ; BB66BB66
-000252r 1  BB 66 BB 66    .byte $BB, $66, $BB, $66      ; BB66BB66
-000256r 1               
-000256r 1               ; Tile 3 — a diamond in colour 15, the entry the main loop cycles
-000256r 1  33 33 33 33    .byte $33, $33, $33, $33      ; 33333333
-00025Ar 1  33 3F F3 33    .byte $33, $3F, $F3, $33      ; 333FF333
-00025Er 1  33 FF FF 33    .byte $33, $FF, $FF, $33      ; 33FFFF33
-000262r 1  3F FF FF F3    .byte $3F, $FF, $FF, $F3      ; 3FFFFFF3
-000266r 1  3F FF FF F3    .byte $3F, $FF, $FF, $F3      ; 3FFFFFF3
-00026Ar 1  33 FF FF 33    .byte $33, $FF, $FF, $33      ; 33FFFF33
-00026Er 1  33 3F F3 33    .byte $33, $3F, $F3, $33      ; 333FF333
-000272r 1  33 33 33 33    .byte $33, $33, $33, $33      ; 33333333
-000276r 1               
-000276r 1               ; Working storage (the .prg is loaded into RAM, so it can live here)
-000276r 1  00           ScrollX:    .byte $00
-000277r 1  00           ScrollY:    .byte $00
-000278r 1  00           FrameCount: .byte $00
-000279r 1  00           HueIndex:   .byte $00
-00027Ar 1  00           Temp:       .byte $00
-00027Ar 1               
+00016Dr 1               ClearVBank:
+00016Dr 1  A9 00          lda #$00
+00016Fr 1  A2 08          ldx #VC_REG_VBANK
+000171r 1                 ; Fall through
+000171r 1               
+000171r 1               ; =============================================================================
+000171r 1               ;   SetReg — write a PICOVDP register through port A
+000171r 1               ; =============================================================================
+000171r 1               ;   In: A = value, X = register number (VC_REG_*)
+000171r 1               ;   Modifies: A
+000171r 1               
+000171r 1               SetReg:
+000171r 1  8D 01 9C       sta VC_REG                    ; Payload first ...
+000174r 1  8A             txa
+000175r 1  09 80          ora #VC_REG_WRITE             ; ... then %1rrrrrrr
+000177r 1  8D 01 9C       sta VC_REG
+00017Ar 1  60             rts
+00017Br 1               
+00017Br 1               ; =============================================================================
+00017Br 1               ;   SetWriteAddr — point port A at a 16-bit VRAM address, for writing
+00017Br 1               ; =============================================================================
+00017Br 1               ;   Writes VBANK with address bits 15:14, then sends the address command, which
+00017Br 1               ;   samples it.  Leaves VBANK set; ClearVBank puts it back.
+00017Br 1               ;   In: A = address low, X = address high
+00017Br 1               ;   Modifies: A, X
+00017Br 1               
+00017Br 1               SetWriteAddr:
+00017Br 1  48             pha                           ; Save the low byte
+00017Cr 1  DA             phx                           ; Save the high byte
+00017Dr 1  8A             txa
+00017Er 1  4A             lsr a                         ; Bits 15:14 down to 1:0
+00017Fr 1  4A             lsr a
+000180r 1  4A             lsr a
+000181r 1  4A             lsr a
+000182r 1  4A             lsr a
+000183r 1  4A             lsr a
+000184r 1  A2 08          ldx #VC_REG_VBANK
+000186r 1  20 rr rr       jsr SetReg
+000189r 1  68             pla                           ; High byte
+00018Ar 1  29 3F          and #$3F                      ; Bits 13:8
+00018Cr 1  09 40          ora #VC_ADDR_WRITE            ; %01aaaaaa
+00018Er 1  AA             tax
+00018Fr 1  68             pla                           ; Low byte
+000190r 1  8D 01 9C       sta VC_REG                    ; Payload: address bits 7:0
+000193r 1  8E 01 9C       stx VC_REG                    ; Command
+000196r 1  60             rts
+000197r 1               
+000197r 1               ; =============================================================================
+000197r 1               ;   Data
+000197r 1               ; =============================================================================
+000197r 1               
+000197r 1               GuardMsg:
+000197r 1  4E 45 45 44    .byte "NEEDS BIOS 2 AND A 6502-PICOVDP", CHAR_CR, CHAR_LF, $00
+00019Br 1  53 20 42 49  
+00019Fr 1  4F 53 20 32  
+0001B9r 1               
+0001B9r 1               ; The pure hue of each row 2-13 (index 7 of each ramp, SPEC §11), as palette
+0001B9r 1               ; entries: %0000RRRR, %GGGGBBBB.
+0001B9r 1               Hues:
+0001B9r 1  0F 00          .byte $0F, $00                ; Red
+0001BBr 1  0F 80          .byte $0F, $80                ; Orange
+0001BDr 1  0F F0          .byte $0F, $F0                ; Yellow
+0001BFr 1  08 F0          .byte $08, $F0                ; Chartreuse
+0001C1r 1  00 F0          .byte $00, $F0                ; Green
+0001C3r 1  00 F8          .byte $00, $F8                ; Spring green
+0001C5r 1  00 FF          .byte $00, $FF                ; Cyan
+0001C7r 1  00 8F          .byte $00, $8F                ; Azure
+0001C9r 1  00 0F          .byte $00, $0F                ; Blue
+0001CBr 1  08 0F          .byte $08, $0F                ; Violet
+0001CDr 1  0F 0F          .byte $0F, $0F                ; Magenta
+0001CFr 1  0F 08          .byte $0F, $08                ; Rose
+0001D1r 1               
+0001D1r 1               ; Four 4bpp tiles, 32 bytes each: eight rows from the top, two pixels a byte,
+0001D1r 1               ; the high nibble leftmost (SPEC §8).  Each nibble is a colour within the
+0001D1r 1               ; cell's sub-palette row.
+0001D1r 1               Tiles:
+0001D1r 1               ; Tile 0 — a bevelled block: light top and left edges, dark bottom and right
+0001D1r 1  DD DD DD DB    .byte $DD, $DD, $DD, $DB      ; DDDDDDDB
+0001D5r 1  DB 99 99 73    .byte $DB, $99, $99, $73      ; DB999973
+0001D9r 1  D9 77 77 53    .byte $D9, $77, $77, $53      ; D9777753
+0001DDr 1  D9 77 77 53    .byte $D9, $77, $77, $53      ; D9777753
+0001E1r 1  D9 77 77 53    .byte $D9, $77, $77, $53      ; D9777753
+0001E5r 1  D9 77 77 53    .byte $D9, $77, $77, $53      ; D9777753
+0001E9r 1  D7 55 55 53    .byte $D7, $55, $55, $53      ; D7555553
+0001EDr 1  B3 33 33 31    .byte $B3, $33, $33, $31      ; B3333331
+0001F1r 1               
+0001F1r 1               ; Tile 1 — diagonal stripes, seamless when tiled
+0001F1r 1  99 94 44 44    .byte $99, $94, $44, $44      ; 99944444
+0001F5r 1  49 99 44 44    .byte $49, $99, $44, $44      ; 49994444
+0001F9r 1  44 99 94 44    .byte $44, $99, $94, $44      ; 44999444
+0001FDr 1  44 49 99 44    .byte $44, $49, $99, $44      ; 44499944
+000201r 1  44 44 99 94    .byte $44, $44, $99, $94      ; 44449994
+000205r 1  44 44 49 99    .byte $44, $44, $49, $99      ; 44444999
+000209r 1  94 44 44 99    .byte $94, $44, $44, $99      ; 94444499
+00020Dr 1  99 44 44 49    .byte $99, $44, $44, $49      ; 99444449
+000211r 1               
+000211r 1               ; Tile 2 — a 2×2 checker
+000211r 1  66 BB 66 BB    .byte $66, $BB, $66, $BB      ; 66BB66BB
+000215r 1  66 BB 66 BB    .byte $66, $BB, $66, $BB      ; 66BB66BB
+000219r 1  BB 66 BB 66    .byte $BB, $66, $BB, $66      ; BB66BB66
+00021Dr 1  BB 66 BB 66    .byte $BB, $66, $BB, $66      ; BB66BB66
+000221r 1  66 BB 66 BB    .byte $66, $BB, $66, $BB      ; 66BB66BB
+000225r 1  66 BB 66 BB    .byte $66, $BB, $66, $BB      ; 66BB66BB
+000229r 1  BB 66 BB 66    .byte $BB, $66, $BB, $66      ; BB66BB66
+00022Dr 1  BB 66 BB 66    .byte $BB, $66, $BB, $66      ; BB66BB66
+000231r 1               
+000231r 1               ; Tile 3 — a diamond in colour 15, the entry the main loop cycles
+000231r 1  33 33 33 33    .byte $33, $33, $33, $33      ; 33333333
+000235r 1  33 3F F3 33    .byte $33, $3F, $F3, $33      ; 333FF333
+000239r 1  33 FF FF 33    .byte $33, $FF, $FF, $33      ; 33FFFF33
+00023Dr 1  3F FF FF F3    .byte $3F, $FF, $FF, $F3      ; 3FFFFFF3
+000241r 1  3F FF FF F3    .byte $3F, $FF, $FF, $F3      ; 3FFFFFF3
+000245r 1  33 FF FF 33    .byte $33, $FF, $FF, $33      ; 33FFFF33
+000249r 1  33 3F F3 33    .byte $33, $3F, $F3, $33      ; 333FF333
+00024Dr 1  33 33 33 33    .byte $33, $33, $33, $33      ; 33333333
+000251r 1               
+000251r 1               ; Working storage (the .prg is loaded into RAM, so it can live here)
+000251r 1  00           ScrollX:    .byte $00
+000252r 1  00           ScrollY:    .byte $00
+000253r 1  00           FrameCount: .byte $00
+000254r 1  00           HueIndex:   .byte $00
+000255r 1  00           Temp:       .byte $00
+000255r 1               
