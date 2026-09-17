@@ -19,6 +19,10 @@ Checks:
   Jump table  Every jumptable.json entry is in INC at its address.
   Stale       Every := symbol in INC valued $A000-$FFFF is defined by the
               BIOS, or named in --allow.
+  Names       SPEC values are VC_*, and BIOS names are copied from BIOS.inc.
+              BIOS.inc's own VDP_* names for SPEC values stay internal to the
+              BIOS, so every VDP_* symbol in INC must be a Kernal RAM variable
+              ($0300-$03FF) that BIOS.dbg defines.
   SPEC        With --spec (6502-PICOVDP SPEC.md): every register name in §5
               has a VC_REG_<NAME> at its block address ($10 and up for the
               aliases at $02-$06), and every status register in §6 has a
@@ -183,6 +187,14 @@ def main():
     summary.append(f"{stale} stale")
     for name in sorted(allow):
         problems.append(f"--allow {name}: not needed")
+
+    misnamed = 0
+    for name, (_, _, line) in equates.items():
+        if name.startswith("VDP_") and not (name in dbg and 0x0300 <= dbg[name] <= 0x03FF):
+            misnamed += 1
+            problems.append(f"name: {name} (line {line}) is not a BIOS RAM variable; "
+                            f"SPEC values are VC_*")
+    summary.append(f"{misnamed} misnamed")
 
     if args.spec:
         registers, status = read_spec(args.spec)
