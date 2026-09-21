@@ -5,6 +5,31 @@ Assembly code for the [AC6502](https://github.com/acwright/6502-ACE) family of c
 > 📖 **Guide:** [AC6502 Documentation](https://acwright.github.io/6502-DOCS/) — the user's and programmer's guide for the whole family.
 > Several of these programs are walked through line by line in [Worked projects](https://acwright.github.io/6502-DOCS/assembly/projects).
 
+## What this repository is for
+
+This is where small assembly programs for the AC6502 family live: demos,
+samples, scratchpads, tests, and anything written to show one thing working.
+Each one is a directory with its own source, its own Makefile and its own
+README, and the top-level `make` builds all of them.
+
+Anything larger gets a repository of its own. A game or an application has
+releases, issues and documentation of its own, and none of that fits in a
+directory next to a twenty-line demo.
+
+The same idea in the other two languages:
+
+- [6502-BAS](https://github.com/acwright/6502-BAS) — BASIC listings
+- [6502-C](https://github.com/acwright/6502-C) — C programs, built with cc65
+
+And three templates to start a new program from, so that nothing has to begin
+in an empty directory:
+
+| Template | What it makes |
+|---|---|
+| [6502-PRG](https://github.com/acwright/6502-PRG) | A `.prg` — a program in RAM, loaded and started from BASIC with `RUN` |
+| [6502-CRT](https://github.com/acwright/6502-CRT) | A `.crt` — a cartridge ROM, or a banked Flash Cart |
+| [6502-BIN](https://github.com/acwright/6502-BIN) | A `.bin` — raw machine code with no BASIC stub, entered at `$0800` |
+
 ## Building Programs
 
 Each program directory contains its own Makefile. To build a program, navigate to its directory and use `make`.
@@ -232,15 +257,57 @@ is the explanation.
 `make FLASH=...` needs 6502-EMULATOR 3.4.0 or later to run: an older emulator
 drops a cartridge that is not 32,768 bytes without a word, and boots to BASIC.
 
+## Contributing
+
+A program here is a directory: the top-level Makefile picks up anything with a
+`Makefile` in it, so adding one is the whole of the mechanism.
+
+1. **Start from a template.** Take [6502-PRG](https://github.com/acwright/6502-PRG),
+   [6502-CRT](https://github.com/acwright/6502-CRT) or
+   [6502-BIN](https://github.com/acwright/6502-BIN) depending on what you are
+   building, and copy its source and Makefile into a new directory here. Name
+   the directory after the program in CamelCase — `HelloWorld`, `BankedDemo` —
+   and give the source and the files it builds the same name.
+2. **Use the shared includes and configs.** Your Makefile reaches `../6502.inc`
+   (or `../6502-VDP.inc`, or `../6502-KIM.inc`) and `../6502.cfg` at the top
+   level rather than keeping copies of its own. Those top-level files are the
+   ones `make check-copies` compares against the repositories that own them,
+   and a private copy quietly misses that check. Copying the nearest existing
+   Makefile and changing the program name gets this right by default.
+3. **Keep the usual targets working.** Every directory answers `make`,
+   `make view` and `make clean`, plus whichever of `woz`, `cf`, `run`,
+   `eeprom`, `flash` and `all-flash` make sense for what it builds. If the
+   program has a VDP build, `make VDP=1` writes it beside the legacy one with a
+   `-VDP` suffix.
+4. **Say which machine it is for.** A KIM program uses `6502-KIM.inc` and
+   `6502-KIM.cfg`; a program that needs a 6502-PICOVDP uses `6502-VDP.inc` and
+   runs on BIOS 2.x only. Put that in the directory's README, and see
+   [Targets, includes and configs](#targets-includes-and-configs) for which
+   pair goes with which machine.
+5. **Write that README.** What the program does, what hardware it needs, and
+   how to build and run it. A few lines is enough — [HelloWorld](HelloWorld/README.md)
+   is the short shape and [BankedDemo](BankedDemo/README.md) the long one.
+6. **Commit what the source builds, not the disk image.** The `.prg`, `.bin` or
+   32 KB `.crt` and its `.lst` are committed so a reader can see what comes out
+   without assembling anything. `.img`, `.map` and the larger Flash Cart images
+   are in `.gitignore`; `make cf` and `make all-flash` rebuild them.
+
+Then open a pull request. If the program turned into something with a life of
+its own while you were writing it, give it a repository of its own instead and
+[add it to the software list](https://acwright.github.io/6502-DOCS/software/)
+on the documentation site.
+
 ## Related
 
 - [6502-ACE](https://github.com/acwright/6502-ACE) — the hardware, and the index of the whole family
 - [6502-BIOS](https://github.com/acwright/6502-BIOS) — the firmware behind `6502.inc` (1.x) and `6502-VDP.inc` (2.x)
 - [6502-PICOVDP](https://github.com/acwright/6502-PICOVDP) — the video card behind `6502-VDP.inc`, and the `SPEC.md` its `VC_*` names come from
 - [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) — run these programs without hardware
-- [6502-PRG](https://github.com/acwright/6502-PRG) — template for starting a new assembly program
+- [6502-PRG](https://github.com/acwright/6502-PRG) — template for starting a new program in RAM
 - [6502-CRT](https://github.com/acwright/6502-CRT) — template for starting a new cartridge
-- [6502-BAS](https://github.com/acwright/6502-BAS) — the same idea for BASIC listings
+- [6502-BIN](https://github.com/acwright/6502-BIN) — template for starting a new raw binary
+- [6502-BAS](https://github.com/acwright/6502-BAS) — the same kind of collection for BASIC listings
+- [6502-C](https://github.com/acwright/6502-C) — the same kind of collection for C, built with cc65
 - [6502-DOCS](https://github.com/acwright/6502-DOCS) — the documentation site: the assembly guide these programs illustrate
 
 ## License
