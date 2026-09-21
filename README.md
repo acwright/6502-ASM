@@ -70,10 +70,16 @@ Installed via the [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) app
 - `make cf` - Create a CompactFlash disk image containing the program
 - `make run` - Launch the emulator app with the built program loaded (`ROM=path/to/BIOS.bin` boots that BIOS image instead of the bundled one)
 - `make eeprom` - Burn a cartridge image to an AT28C256 (cartridge targets)
+- `make flash` - Burn a Flash Cart in circuit through the Flash Helper (cartridge targets)
+- `make all-flash` - Build all four Flash Cart sizes (cartridge targets)
 - `make clean` - Remove build artifacts
 
 Not every program offers every target: `woz` and `cf` belong to programs
-loaded into RAM, and `eeprom` to cartridges.
+loaded into RAM, and `eeprom`, `flash` and `all-flash` to cartridges.
+
+At the top level, `make check-copies` checks the files this repository holds a
+copy of — the two ACE includes and the four banked cartridge configs — against
+the repository that owns them.
 
 ### Example
 
@@ -98,6 +104,9 @@ lives.
 | `HelloWorld` (`VDP=1`) | ACE with 6502-PICOVDP, BIOS 2.x | `6502-VDP.inc` | `6502.cfg` | `HelloWorld-VDP.prg` loaded at `$0800` |
 | `HelloWorldCart` | AC6502 (ACE), TMS9918A, BIOS 1.x | `6502.inc` | `6502-16K.cfg` | `HelloWorldCart.crt` ROM at `$C000` |
 | `HelloWorldCart` (`VDP=1`) | ACE with 6502-PICOVDP, BIOS 2.x | `6502-VDP.inc` | `6502-16K.cfg` | `HelloWorldCart-VDP.crt` ROM at `$C000` |
+| `HelloWorldCart` (`FLASH=512K`) | AC6502 (ACE), TMS9918A, BIOS 1.x | `6502.inc` | `6502-512K.cfg` | `HelloWorldCart-512K.crt` Flash Cart |
+| `BankedDemo` | AC6502 (ACE), TMS9918A, BIOS 1.x | `6502.inc` | `6502-512K.cfg` | `BankedDemo-512K.crt` Flash Cart |
+| `BankedDemo` (`VDP=1`) | ACE with 6502-PICOVDP, BIOS 2.x | `6502-VDP.inc` | `6502-512K.cfg` | `BankedDemo-VDP-512K.crt` Flash Cart |
 | `VdpTiles` | ACE with 6502-PICOVDP, BIOS 2.x | `6502-VDP.inc` | `6502.cfg` | `VdpTiles.prg` loaded at `$0800` |
 | `BitRally`, `Countdown` | AC6502 KIM | `6502-KIM.inc` | `6502-KIM.cfg` | `.bin` loaded at `$0800` |
 
@@ -124,7 +133,8 @@ defines are copied from the BIOS's `BIOS.inc`. `tools/check-include.py`
 checks the file against a build of a BIOS tag and the SPEC's tables.
 
 Both ACE includes are kept identical across the repositories that ship a copy
-(6502-CRT, 6502-PRG, 6502-BIN and 6502-C).
+(6502-CRT, 6502-PRG, 6502-BIN and 6502-C). `make check-copies` compares this
+repository's against 6502-CRT's and fails if they have drifted apart.
 
 `6502-KIM.inc` describes the KIM, which is not a stock ACE. The Keypad Card
 overlays `$C000-$FFFF` and is decoded before ROM, so the machine boots into a
@@ -179,12 +189,48 @@ image.
 disturbing the family's. Both ACE builds, legacy and VDP, use the same two
 configs: program RAM and the cartridge window are the same on 2.x.
 
-`6502-16K.cfg` is the cartridge layout: 16K of code space at `$C000-$FFF9`,
-emitted as a 32K image spanning `$8000-$FFFF` so it can be burned straight to
-a 28C256. A cartridge starts at the RESET vector with nothing initialized and
-nothing to return to, so it calls `KernalInit` itself and never exits. See
-[6502-CRT](https://github.com/acwright/6502-CRT) for the fully commented
-template.
+`6502-16K.cfg` is the ROM cartridge layout: 16K of code space at
+`$C000-$FFF9`, emitted as a 32K image spanning `$8000-$FFFF` so it can be
+burned straight to a 28C256. A cartridge starts at the RESET vector with
+nothing initialized and nothing to return to, so it calls `KernalInit` itself
+and never exits. See [6502-CRT](https://github.com/acwright/6502-CRT) for the
+fully commented template.
+
+A `.crt` is a byte-exact image of the chip on a cart — 32 KB for a ROM cart,
+128 KB to 1 MB for a Flash Cart. There is no header and no container: what is
+in the file is what is on the chip.
+
+### Bigger cartridges
+
+`6502-128K.cfg`, `6502-256K.cfg`, `6502-512K.cfg` and `6502-1M.cfg` are the
+AC6502 Flash Cart, which trades the fixed 16 KB for an 8 KB window at
+`$C000-$DFFF` onto one bank at a time, plus a fixed 8 KB at `$E000-$FFFF` that
+the vectors live in and that the bank register can never take away.
+
+A cartridge project builds one with `FLASH=`:
+
+| Build | Config | Output | Part |
+|---|---|---|---|
+| `make` | `6502-16K.cfg` | `Name.crt`, 32,768 bytes | 28C256 ROM cart |
+| `make FLASH=128K` | `6502-128K.cfg` | `Name-128K.crt`, 131,072 bytes | SST39SF010A |
+| `make FLASH=256K` | `6502-256K.cfg` | `Name-256K.crt`, 262,144 bytes | SST39SF020A |
+| `make FLASH=512K` | `6502-512K.cfg` | `Name-512K.crt`, 524,288 bytes | SST39SF040 |
+| `make FLASH=1M` | `6502-1M.cfg` | `Name-1M.crt`, 1,048,576 bytes | two SST39SF040 |
+
+With `VDP=1` the `-VDP` comes first: `make VDP=1 FLASH=512K` is
+`Name-VDP-512K.crt`. **The size in the name is a label; the size in the bytes
+is what the machine reads** — everything that loads a `.crt` picks the mapper
+from the byte count and only warns when the name disagrees.
+
+The four configs are copies of 6502-CRT's, which generates them, and
+`make check-copies` fails on a stale one. The segment name in them is the
+value you write to the bank register: `.segment "BANK07"` is reached with
+`lda #$07`. `BankedDemo` is the worked example, and the 6502-DOCS chapter
+[Bigger cartridges](https://acwright.github.io/6502-DOCS/assembly/flash-carts)
+is the explanation.
+
+`make FLASH=...` needs 6502-EMULATOR 3.4.0 or later to run: an older emulator
+drops a cartridge that is not 32,768 bytes without a word, and boots to BASIC.
 
 ## Related
 
