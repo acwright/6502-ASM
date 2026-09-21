@@ -14,7 +14,7 @@ Current file: HelloWorldCart.asm
 000000r 2               ;
 000000r 2               ;   CPU:       WDC 65C02S
 000000r 2               ;   Video:     6502-PICOVDP (SPEC draft 0.5)
-000000r 2               ;   BIOS:      v2.0
+000000r 2               ;   BIOS:      v2.0.2
 000000r 2               ;   Assembler: ca65 (cc65 toolchain) — uses := for absolute symbols
 000000r 2               ;
 000000r 2               ;   Include this file in programs for an ACE whose video card is a
@@ -278,6 +278,12 @@ Current file: HelloWorldCart.asm
 000000r 2               VDP_P1              := $0399             ; 1 byte
 000000r 2               VDP_P2              := $039A             ; 1 byte
 000000r 2               VDP_P3              := $039B             ; 1 byte
+000000r 2               VID_BORDER          := $039C             ; 1 byte  — The border the console shows: register 7's
+000000r 2                                                        ;   low nibble.  KernalInit sets $0F (the pen's
+000000r 2                                                        ;   background).  VideoSetColor and VideoSetPen set it
+000000r 2                                                        ;   to the pen's background; COLOR fg,bg,border sets it
+000000r 2                                                        ;   on its own.  Register 7 is write-only, so this is
+000000r 2                                                        ;   what InitVideo puts back (v2.0.2)
 000000r 2               
 000000r 2               
 000000r 2               ; =============================================================================
@@ -340,8 +346,12 @@ Current file: HelloWorldCart.asm
 000000r 2                                                        ;   built-in font into $0800 (VdpLoadFont, font $00) and
 000000r 2                                                        ;   waits for it: returns after the next vertical blank,
 000000r 2                                                        ;   up to a frame later.  Restores palette row 0, sets
-000000r 2                                                        ;   the border from VID_PEN, turns the display on and
+000000r 2                                                        ;   the border to VID_BORDER, turns the display on and
 000000r 2                                                        ;   sets VID_MODE = $01
+000000r 2                                                        ;   The display is off while all of that happens, and a
+000000r 2                                                        ;   blanked card shows the border over the whole screen,
+000000r 2                                                        ;   so a caller with a border of its own sets VID_BORDER
+000000r 2                                                        ;   before the console comes up (v2.0.2)
 000000r 2                                                        ;   Does not clear the screen: the name and attribute
 000000r 2                                                        ;   tables are shown as they are, unscrolled
 000000r 2                                                        ;   A program that switched modes, moved tables or
@@ -384,10 +394,11 @@ Current file: HelloWorldCart.asm
 000000r 2               
 000000r 2               VideoSetColor       := $A027             ; Set the pen for later output, and the border
 000000r 2                                                        ;   In: A = fg<<4 | bg (palette row 0, see Colour Constants)
-000000r 2                                                        ;   VID_PEN = A, and register 7 (VC_REG_COLOR) = A: its
-000000r 2                                                        ;   low nibble is the border, so the border follows the
-000000r 2                                                        ;   background.  Characters already on screen keep
-000000r 2                                                        ;   their colours; VideoClear fills with the pen
+000000r 2                                                        ;   VID_PEN = A, VID_BORDER = A & $0F, and register 7
+000000r 2                                                        ;   (VC_REG_COLOR) = A: its low nibble is the border, so
+000000r 2                                                        ;   the border follows the background.  Characters
+000000r 2                                                        ;   already on screen keep their colours; VideoClear
+000000r 2                                                        ;   fills with the pen
 000000r 2                                                        ;   Brings the console up
 000000r 2                                                        ;   Skips silently if no video card is fitted
 000000r 2                                                        ;   Modifies: Flags, A
@@ -1384,7 +1395,22 @@ Current file: HelloWorldCart.asm
 000000r 1               .include "../6502.inc"
 000000r 1               .endif
 000000r 1               
+000000r 1               ; make FLASH=128K|256K|512K|1M builds the same program as a banked Flash Cart
+000000r 1               ; image instead of a 32K ROM cart. Nothing here uses a bank — this cartridge
+000000r 1               ; is 60-odd bytes and the point of it is the greeting — so the whole of the
+000000r 1               ; difference is which segment the code lands in:
+000000r 1               ;
+000000r 1               ;   CART    $C000-$FFF9, the fixed cartridge's one 16 KB block
+000000r 1               ;   FIXED   $E000-$FFF9, the half of a banked cart that never moves
+000000r 1               ;
+000000r 1               ; The banked window at $C000-$DFFF is simply unused, and the image is mostly
+000000r 1               ; $FF. See BankedDemo for a cartridge that is banked because it has to be, and
+000000r 1               ; 6502-CRT's Cart.asm for the fully commented template.
+000000r 1               .ifdef FLASH
+000000r 1               .segment "FIXED"
+000000r 1               .else
 000000r 1               .segment "CART"
+000000r 1               .endif
 000000r 1               
 000000r 1               ; =============================================================================
 000000r 1               ;   Hello World Cart — the same greeting, burned into a cartridge
@@ -1406,7 +1432,8 @@ Current file: HelloWorldCart.asm
 000000r 1               ;   The Kernal ($A000-$B7FF) and character set ($B800-$BFFF) are still there
 000000r 1               ;   underneath the cartridge window, so the whole jump table is available.
 000000r 1               ;
-000000r 1               ;   Built with 6502-16K.cfg. See 6502-CRT for the fully commented template.
+000000r 1               ;   Built with 6502-16K.cfg, or with 6502-128K/256K/512K/1M.cfg under FLASH=.
+000000r 1               ;   See 6502-CRT for the fully commented template.
 000000r 1               ; =============================================================================
 000000r 1               
 000000r 1               CartReset:

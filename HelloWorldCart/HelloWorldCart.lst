@@ -963,7 +963,22 @@ Current file: HelloWorldCart.asm
 000000r 2               
 000000r 1               .endif
 000000r 1               
+000000r 1               ; make FLASH=128K|256K|512K|1M builds the same program as a banked Flash Cart
+000000r 1               ; image instead of a 32K ROM cart. Nothing here uses a bank — this cartridge
+000000r 1               ; is 60-odd bytes and the point of it is the greeting — so the whole of the
+000000r 1               ; difference is which segment the code lands in:
+000000r 1               ;
+000000r 1               ;   CART    $C000-$FFF9, the fixed cartridge's one 16 KB block
+000000r 1               ;   FIXED   $E000-$FFF9, the half of a banked cart that never moves
+000000r 1               ;
+000000r 1               ; The banked window at $C000-$DFFF is simply unused, and the image is mostly
+000000r 1               ; $FF. See BankedDemo for a cartridge that is banked because it has to be, and
+000000r 1               ; 6502-CRT's Cart.asm for the fully commented template.
+000000r 1               .ifdef FLASH
+000000r 1               .segment "FIXED"
+000000r 1               .else
 000000r 1               .segment "CART"
+000000r 1               .endif
 000000r 1               
 000000r 1               ; =============================================================================
 000000r 1               ;   Hello World Cart — the same greeting, burned into a cartridge
@@ -985,7 +1000,8 @@ Current file: HelloWorldCart.asm
 000000r 1               ;   The Kernal ($A000-$B7FF) and character set ($B800-$BFFF) are still there
 000000r 1               ;   underneath the cartridge window, so the whole jump table is available.
 000000r 1               ;
-000000r 1               ;   Built with 6502-16K.cfg. See 6502-CRT for the fully commented template.
+000000r 1               ;   Built with 6502-16K.cfg, or with 6502-128K/256K/512K/1M.cfg under FLASH=.
+000000r 1               ;   See 6502-CRT for the fully commented template.
 000000r 1               ; =============================================================================
 000000r 1               
 000000r 1               CartReset:

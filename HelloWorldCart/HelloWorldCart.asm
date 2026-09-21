@@ -8,7 +8,22 @@
 .include "../6502.inc"
 .endif
 
+; make FLASH=128K|256K|512K|1M builds the same program as a banked Flash Cart
+; image instead of a 32K ROM cart. Nothing here uses a bank — this cartridge
+; is 60-odd bytes and the point of it is the greeting — so the whole of the
+; difference is which segment the code lands in:
+;
+;   CART    $C000-$FFF9, the fixed cartridge's one 16 KB block
+;   FIXED   $E000-$FFF9, the half of a banked cart that never moves
+;
+; The banked window at $C000-$DFFF is simply unused, and the image is mostly
+; $FF. See BankedDemo for a cartridge that is banked because it has to be, and
+; 6502-CRT's Cart.asm for the fully commented template.
+.ifdef FLASH
+.segment "FIXED"
+.else
 .segment "CART"
+.endif
 
 ; =============================================================================
 ;   Hello World Cart — the same greeting, burned into a cartridge
@@ -30,7 +45,8 @@
 ;   The Kernal ($A000-$B7FF) and character set ($B800-$BFFF) are still there
 ;   underneath the cartridge window, so the whole jump table is available.
 ;
-;   Built with 6502-16K.cfg. See 6502-CRT for the fully commented template.
+;   Built with 6502-16K.cfg, or with 6502-128K/256K/512K/1M.cfg under FLASH=.
+;   See 6502-CRT for the fully commented template.
 ; =============================================================================
 
 CartReset:

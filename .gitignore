@@ -15,6 +15,15 @@
 *.sym
 *.img
 
+# Flash Cart images. The 32K .crt of each cartridge project is committed so a
+# reader can look at what it produces; a 1 MB image of mostly $FF is not worth
+# the same. `make all-flash` in the project rebuilds them. The -VDP builds are
+# covered too, because the target comes last in the name.
+*-128K.*
+*-256K.*
+*-512K.*
+*-1M.*
+
 # Backup and temporary files
 *~
 *.bak
