@@ -37,7 +37,7 @@
 ;   $0400-$04FF   KC Monitor's serial receive ring — LIVE, not spare RAM
 ;   $0500-$07FF   free on a KIM (the Kernal's FS sector buffer; no CF fitted)
 ;   $0800-$7FFF   PROGRAM RAM — everything you write loads at $0800
-;   $9000-$93FF   io5 — Serial Card (R65C51 ACIA), optional
+;   $9000-$93FF   io5 — Serial Card (R6551AP ACIA), optional
 ;   $9400-$97FF   io6 — Accessory bus: the eight LEDs
 ;   $A000-$A0FF   BIOS Kernal jump table (SECTION 4)
 ;   $A100-$B7FF   Kernal implementation
@@ -297,7 +297,7 @@ PrintDecU16         := $A096             ; Print a 16-bit value as decimal
 LEDS                := $9400             ; Write-only — eight LEDs
 
 ; --- Serial Card (io5, $9000-$9003, optional) ---
-;   R65C51 ACIA.  Use Chrout and PrintStr rather than these; they are here
+;   R6551AP ACIA.  Use Chrout and PrintStr rather than these; they are here
 ;   for the episode that looks underneath.
 
 SC_DATA             := $9000             ; R/W — data register

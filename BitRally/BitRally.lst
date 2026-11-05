@@ -44,7 +44,7 @@ Current file: BitRally.asm
 000000r 2               ;   $0400-$04FF   KC Monitor's serial receive ring — LIVE, not spare RAM
 000000r 2               ;   $0500-$07FF   free on a KIM (the Kernal's FS sector buffer; no CF fitted)
 000000r 2               ;   $0800-$7FFF   PROGRAM RAM — everything you write loads at $0800
-000000r 2               ;   $9000-$93FF   io5 — Serial Card (R65C51 ACIA), optional
+000000r 2               ;   $9000-$93FF   io5 — Serial Card (R6551AP ACIA), optional
 000000r 2               ;   $9400-$97FF   io6 — Accessory bus: the eight LEDs
 000000r 2               ;   $A000-$A0FF   BIOS Kernal jump table (SECTION 4)
 000000r 2               ;   $A100-$B7FF   Kernal implementation
@@ -304,7 +304,7 @@ Current file: BitRally.asm
 000000r 2               LEDS                := $9400             ; Write-only — eight LEDs
 000000r 2               
 000000r 2               ; --- Serial Card (io5, $9000-$9003, optional) ---
-000000r 2               ;   R65C51 ACIA.  Use Chrout and PrintStr rather than these; they are here
+000000r 2               ;   R6551AP ACIA.  Use Chrout and PrintStr rather than these; they are here
 000000r 2               ;   for the episode that looks underneath.
 000000r 2               
 000000r 2               SC_DATA             := $9000             ; R/W — data register
