@@ -139,7 +139,7 @@ lives.
 
 `6502.inc` describes a fully fitted ACE with a TMS9918A running BIOS 1.x: the
 Kernal jump table, BASIC, the Monitor, video, sound, storage, the RTC and the
-VIA. It is **frozen at BIOS 1.6** and changes only for a 1.x fix.
+VIA. It follows the 1.x line, at **BIOS 1.7** now, and changes only for a 1.x fix.
 
 `6502-VDP.inc` describes an ACE whose video card is a
 [6502-PICOVDP](https://github.com/acwright/6502-PICOVDP), running BIOS 2.x.
@@ -163,7 +163,7 @@ repository's against 6502-CRT's and fails if they have drifted apart.
 
 `6502-KIM.inc` describes the KIM, which is not a stock ACE. The Keypad Card
 overlays `$C000-$FFFF` and is decoded before ROM, so the machine boots into a
-hex monitor rather than BASIC. It has no video, no sound, no storage, no RTC
+hex monitor rather than BASIC. As standard it has no video, no sound, no storage, no RTC
 and no VIA, and a few addresses mean something else entirely — `$9400` is a
 write-only LED latch here, not the family's GPIO window. It also names the
 things only a KIM has: the LED latch, and the keypad mailbox that replaces

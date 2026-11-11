@@ -3,7 +3,7 @@
 ; =============================================================================
 ;
 ;   CPU:       WDC 65C02S at 1 MHz
-;   ROM:       AC6502 BIOS v1.6, with the Keypad Card overlaying the top
+;   ROM:       AC6502 BIOS v1.7, with the Keypad Card overlaying the top
 ;   Assembler: ca65 (cc65 toolchain) — := for an address, = for a value
 ;
 ;   Every address on this machine that has a name, and nothing else.  If a
@@ -167,11 +167,12 @@ IRQ_PTR             := $0300             ; 2 bytes — IRQ handler vector
 BRK_PTR             := $0302             ; 2 bytes — BRK handler vector
 NMI_PTR             := $0304             ; 2 bytes — NMI handler vector
 
-;   What the boot probe actually found.  On a KIM with the Serial Card fitted
-;   this reads $10, and on one without it reads $00.  It never reads anything
-;   else, because the other seven cards cannot be present on this machine —
-;   the Keypad Card is in the slot.  Test it before calling anything that
-;   needs the serial port:
+;   What the boot probe actually found.  On the standard KIM, Serial Card
+;   fitted, this reads $10, and without it $00.  The family's other cards can
+;   still be fitted, and then their bits are set too: a Storage Card gives
+;   $18, a Sound Card $50.  (BIOS 1.6 read $50 with no Sound Card at all,
+;   taking the empty slot's open bus for a SID; 1.7 does not.)  Test it before
+;   calling anything that needs the serial port:
 ;
 ;       lda HW_PRESENT
 ;       and #HW_SC
@@ -180,8 +181,8 @@ NMI_PTR             := $0304             ; 2 bytes — NMI handler vector
 HW_PRESENT          := $030D             ; 1 byte — hardware present bitmask
 
 HW_SC               = %00010000          ; Serial Card — the only bit a KIM sets
-; The rest of the bitmask, so a $10 on screen is legible.  None of these can
-; ever be set on a KIM:
+; The rest of the bitmask, so a $10 on screen is legible.  The standard KIM
+; sets none of these:
 HW_RAM_L            = %00000001          ; Banked RAM low
 HW_RAM_H            = %00000010          ; Banked RAM high
 HW_RTC              = %00000100          ; Real-time clock
@@ -310,8 +311,8 @@ SC_STATUS_TDRE      = %00010000          ; Transmitter empty — ready to send
 SC_STATUS_RDRF      = %00001000          ; Receiver full — a byte is waiting
 
 ; --- What this machine does not have ---
-;   No video card, no sound, no storage, no real-time clock, no VIA, no
-;   joysticks, and no banked RAM.  The Kernal entries that drive them are
+;   As standard, no video card, no sound, no storage, no real-time clock, no
+;   VIA, no joysticks, and no banked RAM.  The Kernal entries that drive them are
 ;   still in ROM and still safe to call — they check HW_PRESENT and return —
 ;   but they will do nothing, so there is no reason to call them, and no
 ;   reason for their names to be in this file.
