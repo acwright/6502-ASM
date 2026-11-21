@@ -75,6 +75,7 @@ BANKSHDW  = $3A
 SRC       = $3B                 ; 2 bytes — source pointer for CopyToVram
 COUNT     = $3D                 ; 2 bytes — bytes left to copy
 PICTURE   = $3F                 ; 1 byte  — which picture is on screen, 0-7
+STICK     = $42                 ; 1 byte  — ReadStickSettled's first read
 .ifdef DIAG
 DIAGSRC   = $40                 ; 1 byte  — 'S' (serial) or 'J' (stick): what stepped
 DIAGVAL   = $41                 ; 1 byte  — the byte, or the ReadJoystick1 value
@@ -177,6 +178,13 @@ CartReset:
 ; =============================================================================
 ;   `,` steps back and anything else steps forward; on a machine with a GPIO
 ;   card, so do left and right on joystick 1.
+;
+;   The stick is read once a frame, never back to back. Every ReadJoystick1
+;   takes the VIA's ports from the keyboard encoders for a few hundred
+;   microseconds, and a loop that did nothing else gave them back for barely a
+;   tenth of a millisecond at a time: too little to scan a keyboard, so the
+;   keyboard stopped working while the gallery ran. Read once a frame, the
+;   encoders have the ports nearly all the time.
 ; =============================================================================
 
 MainLoop:
@@ -198,7 +206,7 @@ MainLoop:
   lda HW_PRESENT
   and #HW_GPIO
   beq MainLoop                  ; No GPIO card: the keyboard is the whole of it
-  jsr ReadJoystick1             ; Active low — a held direction is a 0 bit
+  jsr ReadStickSettled          ; Active low — a held direction is a 0 bit
   tax
   and #%01000000                ; Bit 6: left
   beq @StickPrev
@@ -290,18 +298,64 @@ DiagNibble:
 .endif
 
 ; =============================================================================
+;   ReadStickSettled — joystick 1, as it has read for two frames
+; =============================================================================
+;   A = the stick, read twice a frame apart, when the two reads agree; $FF
+;   (nothing pressed) when they don't. A switch bounces for a few milliseconds
+;   when it closes, and a single read can catch it open, closed or anywhere
+;   between. Two reads a frame apart that agree are the stick, not the bounce.
+;   Waits a frame first, so a caller polling in a loop reads once a frame.
+; =============================================================================
+
+ReadStickSettled:
+  jsr FrameWait
+  jsr ReadJoystick1
+  sta STICK
+  jsr FrameWait
+  jsr ReadJoystick1
+  cmp STICK
+  beq @Agreed
+  lda #$FF                      ; still moving: count it as nothing yet
+@Agreed:
+  rts
+
+; =============================================================================
 ;   WaitStickCentre — hold until joystick 1 is released
 ; =============================================================================
 ;   Without this one flick of the stick steps through the whole gallery in a
 ;   couple of frames. The keyboard needs no equivalent: the ring buffer already
-;   gives one event per press.
+;   gives one event per press. Released means released on two reads a frame
+;   apart: one bounce on the way in reads as released for an instant, and
+;   taking that as the end of the push is what stepped twice on one push.
 ; =============================================================================
 
 WaitStickCentre:
+  jsr FrameWait
   jsr ReadJoystick1
-  cmp #$FF                      ; every line released
+  cmp #$FF                      ; every line released?
+  bne WaitStickCentre
+  jsr FrameWait
+  jsr ReadJoystick1
+  cmp #$FF                      ; and still, a frame later?
   bne WaitStickCentre
   rts
+
+; =============================================================================
+;   FrameWait — wait about one video frame
+; =============================================================================
+;   On BIOS 2.x, the start of the next vertical blank. BIOS 1.x has no
+;   WaitVBlank, so it waits 2 centiseconds instead, about a frame and a bit.
+;   Either way: Modifies A, X, Y.
+; =============================================================================
+
+FrameWait:
+.ifdef VDP
+  jmp WaitVBlank
+.else
+  lda #2                        ; 2 cs
+  ldx #0
+  jmp SysDelay
+.endif
 
 ; =============================================================================
 ;   ShowPicture — put picture A on the screen

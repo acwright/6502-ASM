@@ -9,7 +9,33 @@ That is the only reason this project exists. A demo that would fit in a fixed
 cartridge teaches nothing about why banking is there.
 
 Press any key — or push joystick 1 right — for the next picture, `,` or left
-for the previous one.
+for the previous one. Every byte but `,` steps forward, so over serial a
+terminal's Return is a step of its own: `A` then Return is two pictures.
+
+Reading the stick
+-----------------
+
+The demo reads joystick 1 at most once a video frame (`WaitVBlank` on the 2.x
+build; a 2 cs `SysDelay` on the 1.x build, which has no `WaitVBlank`), and a
+push or a release counts only when two reads a frame apart agree. That does two
+jobs, both found on an ACE at the bench (2026-11-21):
+
+- **The keyboard keeps working.** Reading the stick disables the keyboard
+  encoders for the read. Read back to back, they were enabled for only ~90 µs at
+  a time, and the ACE's own keyboard sent nothing. Read once a frame, they have
+  nearly the whole frame.
+- **One push is one step.** A stick's switch bounces as it closes. Taken at
+  face value, the bounce looked like a release, so one push stepped twice: once
+  at the push and once at the real release.
+
+The step is taken when the stick comes back to centre, so a held stick steps
+nothing until it is let go. Any program that polls a stick in a loop should read
+it at most once a frame, for the first reason.
+
+`make DIAG=1` (with or without `VDP=1`) builds a bench variant that prints a line
+over serial for every step: `S xx p` for a byte from the input buffer (serial or
+either keyboard) or `J xx p` for a stick step, `xx` the byte or the stick value
+and `p` the picture now shown.
 
 The shape of it
 ---------------
