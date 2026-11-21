@@ -34,6 +34,17 @@ CONFIG   = 6502-$(FLASH)
 ASFLAGS += --asm-define FLASH
 OUT      = $(TARGET)$(SUFFIX)-$(FLASH)
 
+# DIAG=1 builds a bench variant that reports every step over serial: a line
+# `S xx p` for a serial byte or `J xx p` for a stick step (xx the byte or the
+# stick value, p the picture now shown). It is for finding input faults on real
+# hardware; without it the image is the same as ever.
+DIAG ?= 0
+ifeq ($(DIAG),1)
+  ASFLAGS += --asm-define DIAG
+  # The size stays last in the name: it is what names the cart's size.
+  OUT     := $(TARGET)$(SUFFIX)-DIAG-$(FLASH)
+endif
+
 RUNFLAGS += $(if $(ROM),--rom $(ROM))
 
 .PHONY: all build all-flash gallery check-gallery view run eeprom flash clean

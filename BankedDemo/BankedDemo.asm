@@ -75,6 +75,10 @@ BANKSHDW  = $3A
 SRC       = $3B                 ; 2 bytes — source pointer for CopyToVram
 COUNT     = $3D                 ; 2 bytes — bytes left to copy
 PICTURE   = $3F                 ; 1 byte  — which picture is on screen, 0-7
+.ifdef DIAG
+DIAGSRC   = $40                 ; 1 byte  — 'S' (serial) or 'J' (stick): what stepped
+DIAGVAL   = $41                 ; 1 byte  — the byte, or the ReadJoystick1 value
+.endif
 
 ; The window, and the one layout every bank shares.
 PIC_PATTERNS = $C000
@@ -181,6 +185,11 @@ MainLoop:
   jsr ReadBuffer                ; A = the byte. NOT Chrin, which echoes it —
                                 ;   and an echo into a screen of picture would
                                 ;   redraw a cell of it as a letter.
+.ifdef DIAG
+  sta DIAGVAL
+  ldx #'S'
+  stx DIAGSRC
+.endif
   cmp #','
   beq @Prev
   bra @Next
@@ -199,6 +208,11 @@ MainLoop:
   bra MainLoop
 
 @StickNext:
+.ifdef DIAG
+  stx DIAGVAL                   ; X = the stick value that stepped (ReadJoystick1
+  lda #'J'                      ;   and KBDisable preserve X)
+  sta DIAGSRC
+.endif
   jsr WaitStickCentre
 @Next:
   lda PICTURE
@@ -209,6 +223,11 @@ MainLoop:
   bra @Show
 
 @StickPrev:
+.ifdef DIAG
+  stx DIAGVAL
+  lda #'J'
+  sta DIAGSRC
+.endif
   jsr WaitStickCentre
 @Prev:
   lda PICTURE
@@ -219,8 +238,54 @@ MainLoop:
 
 @Show:
   sta PICTURE
+.ifdef DIAG
+  jsr DiagReport                ; Before the redraw, so the line's time is the step's
+.endif
   jsr ShowPicture
   bra MainLoop
+
+.ifdef DIAG
+; =============================================================================
+;   DiagReport — say over serial what stepped (DIAG builds only)
+; =============================================================================
+;   `S 41 3` is a serial byte $41 that moved the gallery to picture 3; `J BF 4`
+;   is the stick, read as $BF, moving it to picture 4. SerialChrout goes to the
+;   ACIA whatever the console mode, and the console is serial here anyway.
+; =============================================================================
+
+DiagReport:
+  lda DIAGSRC
+  jsr SerialChrout
+  lda #' '
+  jsr SerialChrout
+  lda DIAGVAL
+  lsr a
+  lsr a
+  lsr a
+  lsr a
+  jsr DiagNibble
+  lda DIAGVAL
+  and #$0F
+  jsr DiagNibble
+  lda #' '
+  jsr SerialChrout
+  lda PICTURE
+  ora #'0'
+  jsr SerialChrout
+  lda #$0D
+  jsr SerialChrout
+  lda #$0A
+  jmp SerialChrout
+
+DiagNibble:
+  cmp #10
+  bcc @Digit
+  adc #'A' - 10 - 1             ; carry is set here
+  jmp SerialChrout
+@Digit:
+  ora #'0'
+  jmp SerialChrout
+.endif
 
 ; =============================================================================
 ;   WaitStickCentre — hold until joystick 1 is released
