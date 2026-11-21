@@ -240,6 +240,8 @@ MainLoop:
   sta PICTURE
 .ifdef DIAG
   jsr DiagReport                ; Before the redraw, so the line's time is the step's
+  lda PICTURE                   ; DiagReport leaves A = $0A, its line feed, and
+                                ;   ShowPicture takes the bank in A
 .endif
   jsr ShowPicture
   bra MainLoop
