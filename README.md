@@ -139,7 +139,7 @@ lives.
 
 `6502.inc` describes a fully fitted ACE with a TMS9918A running BIOS 1.x: the
 Kernal jump table, BASIC, the Monitor, video, sound, storage, the RTC and the
-VIA. It follows the 1.x line, at **BIOS 1.7** now, and changes only for a 1.x fix.
+VIA. It follows the 1.x line, at **BIOS 1.8** now, and changes only for a 1.x fix.
 
 `6502-VDP.inc` describes an ACE whose video card is a
 [6502-PICOVDP](https://github.com/acwright/6502-PICOVDP), running BIOS 2.x.

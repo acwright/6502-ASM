@@ -3,7 +3,7 @@
 ; =============================================================================
 ;
 ;   CPU:       WDC 65C02S at 1 MHz
-;   ROM:       AC6502 BIOS v1.7, with the Keypad Card overlaying the top
+;   ROM:       AC6502 BIOS v1.8, with the Keypad Card overlaying the top
 ;   Assembler: ca65 (cc65 toolchain) — := for an address, = for a value
 ;
 ;   Every address on this machine that has a name, and nothing else.  If a
